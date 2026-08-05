@@ -30,9 +30,8 @@
 
     <!-- ============ 步骤指引 ============ -->
     <div class="col col-left" id="colLeft">
-      <button class="toggle-bar toggle-left-bar" id="toggleLeft" title="收起左侧面板">◀</button>
 
-      <!-- 步骤指引条 -->
+      <!-- 步骤指引条（含收起按钮） -->
       <div class="step-guide" id="stepGuide">
         <div class="sg-step sg-active" data-step="1" data-target="cardSpec">
           <span class="sg-num">①</span><span class="sg-txt">选柜型</span>
@@ -49,6 +48,7 @@
         <div class="sg-step" data-step="4" data-target="colRight">
           <span class="sg-num">④</span><span class="sg-txt">看结果</span>
         </div>
+        <button class="collapse-btn" id="toggleLeft" title="收起左侧面板">◀ 收起</button>
       </div>
 
       <!-- ① 集装箱规格 -->
@@ -226,9 +226,11 @@
 
     <!-- ============ 右栏：统计 ============ -->
     <div class="col col-right" id="colRight">
-      <button class="toggle-bar toggle-right-bar" id="toggleRight" title="收起右侧面板">▶</button>
       <div class="card">
-        <h3><span class="ico">📊</span>方案总览</h3>
+        <div class="card-header-row">
+          <h3><span class="ico">📊</span>方案总览</h3>
+          <button class="collapse-btn" id="toggleRight" title="收起右侧面板">收起 ▶</button>
+        </div>
         <div class="body" id="summaryBox"><div class="empty">尚未计算</div></div>
       </div>
 

@@ -64,56 +64,53 @@ button, input, select, textarea { font-family: inherit; font-size: 13px; color: 
 #main.hide-right { grid-template-columns: 400px 1fr 0; }
 #main.hide-both  { grid-template-columns: 0 1fr 0; }
 
-/* 折叠/展开按钮（固定在栏边缘） */
-.toggle-bar {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 200;
-  width: 18px;
-  height: 48px;
-  background: var(--brand);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(31,111,235,.35);
-  transition: background .15s;
-}
-.toggle-bar:hover { background: var(--brand-d); }
-.toggle-left-bar  { left: -26px; }   /* 左栏的折叠钮在左栏左边 */
-.toggle-right-bar { right: -26px; }  /* 右栏的折叠钮在右栏右边 */
+/* ---- 折叠/展开按钮（内嵌在栏里，不越界） ---- */
 
-/* 栏被隐藏后，从 #main 边缘伸出的展开钮 */
+/* 步骤指引条内的收起按钮 */
+.collapse-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 24px;
+  background: rgba(31,111,235,.12); color: var(--brand);
+  border: 1px solid rgba(31,111,235,.25); border-radius: 5px;
+  cursor: pointer; font-size: 11px; font-weight: 700;
+  padding: 0; margin-left: 6px; flex-shrink: 0;
+  transition: background .12s, color .12s;
+  vertical-align: middle;
+  line-height: 1;
+}
+.collapse-btn:hover { background: var(--brand); color: #fff; }
+
+/* 右栏标题旁的收起按钮 */
+.card-header-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.card-header-row h3 { margin: 0; flex: 1; min-width: 0; }
+.card-header-row .collapse-btn {
+  height: 22px; width: 26px; font-size: 10px;
+}
+
+/* 展开按钮（固定在 #main 边缘，用 fixed 定位不受 overflow 裁切） */
 .expand-pin {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  position: fixed;
+  top: 50%; transform: translateY(-50%);
   z-index: 200;
-  width: 20px;
-  height: 56px;
+  width: 22px; height: 64px;
   background: var(--brand);
   color: #fff;
   border: none;
-  border-radius: 6px 0 0 6px;
   cursor: pointer;
   font-size: 13px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: -2px 2px 10px rgba(31,111,235,.4);
-  writing-mode: vertical-lr;
-  text-orientation: mixed;
+  line-height: 1.2;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: -2px 2px 12px rgba(31,111,235,.45);
+  writing-mode: vertical-lr; text-orientation: mixed;
+  border-radius: 0 7px 7px 0;
+  letter-spacing: 2px;
+  transition: background .12s;
 }
 .expand-pin:hover { background: var(--brand-d); }
-.expand-pin-left  { left: 0; border-radius: 0 6px 6px 0; }
-.expand-pin-right { right: 0; }
+.expand-pin-left  { left: 0; border-radius: 0 7px 7px 0; }
+.expand-pin-right { right: 0; border-radius: 7px 0 0 7px; }
 
 /* ---------- 步骤指引条 ---------- */
 .step-guide {

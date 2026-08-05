@@ -721,10 +721,10 @@
     var mainEl = $('main');
     var colLeft = $('colLeft');
     var colRight = $('colRight');
-    var toggleLeftBtn = $('toggleLeft');
-    var toggleRightBtn = $('toggleRight');
-    var expandLeftBtn = $('expandLeft');
-    var expandRightBtn = $('expandRight');
+    var toggleLeftBtn = $('toggleLeft');   /* 步骤指引条内的「◀ 收起」 */
+    var toggleRightBtn = $('toggleRight');  /* 方案总览标题旁的「收起 ▶」 */
+    var expandLeftBtn = $('expandLeft');    /* fixed 定位，左边缘伸出 */
+    var expandRightBtn = $('expandRight');  /* fixed 定位，右边缘伸出 */
 
     function updateToggleState() {
       var hideL = colLeft.classList.contains('collapsed');
@@ -733,24 +733,20 @@
       mainEl.classList.toggle('hide-left', hideL);
       mainEl.classList.toggle('hide-right', hideR);
       mainEl.classList.toggle('hide-both', hideL && hideR);
-      // 折叠按钮显隐
-      toggleLeftBtn.style.display = hideL ? 'none' : '';
-      toggleRightBtn.style.display = hideR ? 'none' : '';
+      // 折叠按钮：栏隐藏时连按钮一起藏（因为按钮在栏内部）
+      // 展开按钮（fixed 定位，不受 overflow 裁切）
       expandLeftBtn.style.display = hideL ? '' : 'none';
       expandRightBtn.style.display = hideR ? '' : 'none';
-      // 折叠按钮文字
-      toggleLeftBtn.textContent = hideL ? '▶' : '◀';
-      toggleRightBtn.textContent = hideR ? '◀' : '▶';
       // 通知 3D 视口 resize
       setTimeout(function () { if (viewer && viewer.renderer) viewer.renderer.setSize(viewer.container.clientWidth, viewer.container.clientHeight); }, 50);
     }
 
     toggleLeftBtn.addEventListener('click', function () {
-      colLeft.classList.toggle('collapsed');
+      colLeft.classList.add('collapsed');
       updateToggleState();
     });
     toggleRightBtn.addEventListener('click', function () {
-      colRight.classList.toggle('collapsed');
+      colRight.classList.add('collapsed');
       updateToggleState();
     });
     expandLeftBtn.addEventListener('click', function () {
