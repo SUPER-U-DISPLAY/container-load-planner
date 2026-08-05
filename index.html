@@ -29,7 +29,8 @@
   <div id="main">
 
     <!-- ============ 步骤指引 ============ -->
-    <div class="col col-left">
+    <div class="col col-left" id="colLeft">
+      <button class="toggle-bar toggle-left-bar" id="toggleLeft" title="收起左侧面板">◀</button>
 
       <!-- 步骤指引条 -->
       <div class="step-guide" id="stepGuide">
@@ -225,6 +226,7 @@
 
     <!-- ============ 右栏：统计 ============ -->
     <div class="col col-right" id="colRight">
+      <button class="toggle-bar toggle-right-bar" id="toggleRight" title="收起右侧面板">▶</button>
       <div class="card">
         <h3><span class="ico">📊</span>方案总览</h3>
         <div class="body" id="summaryBox"><div class="empty">尚未计算</div></div>
@@ -251,6 +253,10 @@
       </div>
       <div style="height:2px"></div>
     </div>
+
+    <!-- 展开按钮（栏隐藏时显示） -->
+    <button class="expand-pin expand-pin-left" id="expandLeft" style="display:none" title="展开左侧面板">◀ 左侧 ▶</button>
+    <button class="expand-pin expand-pin-right" id="expandRight" style="display:none" title="展开右侧面板">◀ 右侧 ▶</button>
 
   </div>
 </div>

@@ -37,15 +37,83 @@ button, input, select, textarea { font-family: inherit; font-size: 13px; color: 
 }
 #main {
   display: grid;
-  grid-template-columns: 372px 1fr 300px;
+  grid-template-columns: 400px 1fr 300px;
   gap: 10px;
   padding: 10px;
   min-height: 0;
   overflow: hidden;
 }
-.col { min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.col { min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; position: relative; }
 .col-left  { overflow-y: auto; overflow-x: hidden; padding-right: 2px; }
 .col-right { overflow-y: auto; overflow-x: hidden; padding-right: 2px; }
+
+/* ---- 栏折叠 ---- */
+.col.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+  opacity: 0;
+  transition: opacity .15s, width .2s;
+}
+/* 折叠后中间区撑满 */
+#main.hide-left  { grid-template-columns: 0 1fr 300px; }
+#main.hide-right { grid-template-columns: 400px 1fr 0; }
+#main.hide-both  { grid-template-columns: 0 1fr 0; }
+
+/* 折叠/展开按钮（固定在栏边缘） */
+.toggle-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 200;
+  width: 18px;
+  height: 48px;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(31,111,235,.35);
+  transition: background .15s;
+}
+.toggle-bar:hover { background: var(--brand-d); }
+.toggle-left-bar  { left: -26px; }   /* 左栏的折叠钮在左栏左边 */
+.toggle-right-bar { right: -26px; }  /* 右栏的折叠钮在右栏右边 */
+
+/* 栏被隐藏后，从 #main 边缘伸出的展开钮 */
+.expand-pin {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 200;
+  width: 20px;
+  height: 56px;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 6px 0 0 6px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: -2px 2px 10px rgba(31,111,235,.4);
+  writing-mode: vertical-lr;
+  text-orientation: mixed;
+}
+.expand-pin:hover { background: var(--brand-d); }
+.expand-pin-left  { left: 0; border-radius: 0 6px 6px 0; }
+.expand-pin-right { right: 0; }
 
 /* ---------- 步骤指引条 ---------- */
 .step-guide {
@@ -316,7 +384,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shad
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 1400px) {
-  #main { grid-template-columns: 330px 1fr 268px; }
+  #main { grid-template-columns: 360px 1fr 260px; }
 }
 @media (max-width: 1180px) {
   #main { grid-template-columns: 320px 1fr; }

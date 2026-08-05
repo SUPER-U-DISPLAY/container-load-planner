@@ -717,6 +717,51 @@
       else if (e.key === 'Enter') { $('btnCalc').click(); }
     });
 
+    /* ===== 左右栏折叠/展开 ===== */
+    var mainEl = $('main');
+    var colLeft = $('colLeft');
+    var colRight = $('colRight');
+    var toggleLeftBtn = $('toggleLeft');
+    var toggleRightBtn = $('toggleRight');
+    var expandLeftBtn = $('expandLeft');
+    var expandRightBtn = $('expandRight');
+
+    function updateToggleState() {
+      var hideL = colLeft.classList.contains('collapsed');
+      var hideR = colRight.classList.contains('collapsed');
+      // 更新 #main 的 grid class
+      mainEl.classList.toggle('hide-left', hideL);
+      mainEl.classList.toggle('hide-right', hideR);
+      mainEl.classList.toggle('hide-both', hideL && hideR);
+      // 折叠按钮显隐
+      toggleLeftBtn.style.display = hideL ? 'none' : '';
+      toggleRightBtn.style.display = hideR ? 'none' : '';
+      expandLeftBtn.style.display = hideL ? '' : 'none';
+      expandRightBtn.style.display = hideR ? '' : 'none';
+      // 折叠按钮文字
+      toggleLeftBtn.textContent = hideL ? '▶' : '◀';
+      toggleRightBtn.textContent = hideR ? '◀' : '▶';
+      // 通知 3D 视口 resize
+      setTimeout(function () { if (viewer && viewer.renderer) viewer.renderer.setSize(viewer.container.clientWidth, viewer.container.clientHeight); }, 50);
+    }
+
+    toggleLeftBtn.addEventListener('click', function () {
+      colLeft.classList.toggle('collapsed');
+      updateToggleState();
+    });
+    toggleRightBtn.addEventListener('click', function () {
+      colRight.classList.toggle('collapsed');
+      updateToggleState();
+    });
+    expandLeftBtn.addEventListener('click', function () {
+      colLeft.classList.remove('collapsed');
+      updateToggleState();
+    });
+    expandRightBtn.addEventListener('click', function () {
+      colRight.classList.remove('collapsed');
+      updateToggleState();
+    });
+
     // 首次自动计算
     setTimeout(calc, 260);
   }
