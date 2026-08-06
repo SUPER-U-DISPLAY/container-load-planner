@@ -28,14 +28,17 @@
 
     <nav class="tb-actions">
       <div class="tb-group">
-        <button class="btn ghost" id="btnImportTpl" title="导入本公司标准装箱单（Packing List）">＋ 导入装箱单</button>
-        <button class="btn ghost" id="btnImportAny" title="导入任意 Excel / CSV 文件">导入 Excel</button>
+        <button class="btn btn-import-main" id="btnImportTpl" title="导入本公司标准装箱单（Packing List）">＋ 导入装箱单</button>
+        <button class="btn btn-import-sub" id="btnImportAny" title="导入任意 Excel / CSV 文件">导入 Excel</button>
+        <button class="btn btn-import-ghost" id="btnTplDown" title="下载标准导入模板">下载模板</button>
       </div>
       <span class="tb-sep"></span>
       <div class="tb-group">
-        <button class="btn ghost" id="btnTplDown" title="下载标准导入模板">模板</button>
-        <button class="btn ghost" id="btnExpImg" title="导出当前柜 3D 截图">图片</button>
-        <button class="btn ghost" id="btnExpPdf" title="导出完整装柜方案 PDF">PDF</button>
+        <button class="btn ghost" id="btnExpImg" title="导出当前柜 3D 截图">导出图片</button>
+        <button class="btn ghost" id="btnExpPdf" title="导出完整装柜方案 PDF">导出PDF</button>
+      </div>
+      <!-- 隐藏保留：以下按钮 ui.js 仍绑定，功能通过其他入口触发 -->
+      <div style="display:none">
         <button class="btn ghost" id="btnExpXls" title="导出装柜明细表">明细</button>
       </div>
       <span class="tb-sep"></span>
@@ -47,26 +50,6 @@
 
     <!-- ============ 左栏：设置 ============ -->
     <section class="col col-left" id="colLeft">
-
-      <!-- 步骤指引 -->
-      <div class="step-guide" id="stepGuide">
-        <div class="sg-step sg-active" data-step="1" data-target="cardSpec">
-          <span class="sg-num">1</span><span class="sg-txt">选柜型</span>
-        </div>
-        <div class="sg-rail"></div>
-        <div class="sg-step" data-step="2" data-target="cardCargo">
-          <span class="sg-num">2</span><span class="sg-txt">录货物</span>
-        </div>
-        <div class="sg-rail"></div>
-        <div class="sg-step" data-step="3">
-          <span class="sg-num">3</span><span class="sg-txt">算方案</span>
-        </div>
-        <div class="sg-rail"></div>
-        <div class="sg-step" data-step="4" data-target="colRight">
-          <span class="sg-num">4</span><span class="sg-txt">看结果</span>
-        </div>
-        <button class="collapse-btn" id="toggleLeft" title="收起左侧面板">收起 ›</button>
-      </div>
 
       <!-- ① 集装箱规格 -->
       <div class="card" id="cardSpec">
@@ -89,28 +72,10 @@
         </div>
       </div>
 
-      <!-- 算法参数（默认折叠） -->
-      <div class="card card-collapsible collapsed" id="cardAlgo">
-        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">⚙</span>算法参数<span class="col-arrow">▾</span></h3>
-        <div class="body">
-          <div class="grid2">
-            <div class="field">
-              <label>最小支撑率 <span id="labSup" class="val">75%</span></label>
-              <input type="range" id="rgSupport" min="0" max="100" step="5" value="75">
-            </div>
-            <div class="field">
-              <label>最多柜数</label>
-              <input type="number" id="inMaxCtn" value="20" min="1" max="60">
-            </div>
-          </div>
-          <p class="hint">支撑率越高越稳妥（货物底面须被下层托住的比例）；越低则装载率越高。</p>
-        </div>
-      </div>
-
       <!-- ② 货物清单 -->
       <div class="card flex" id="cardCargo" style="min-height:240px">
-        <h3><span class="ico">▤</span>货物清单<span class="right"><b id="cargoCount">0</b> 种 · <b id="cargoQty">0</b> 箱</span></h3>
-        <div class="body" style="padding:0">
+        <h3><span class="ico">▤</span>货物清单<span class="right"><b id="cargoCount">0</b> 种 · <b id="cargoQty">0</b> 箱</b></h3>
+        <div class="body cargo-body">
           <div class="table-scroll">
             <table class="cargo-table">
               <thead>
@@ -130,6 +95,24 @@
             </table>
           </div>
           <div class="empty" id="cargoEmpty">还没有货物，导入装箱单或点下方「添加」</div>
+        </div>
+      </div>
+
+      <!-- ③ 算法参数（默认折叠） -->
+      <div class="card card-collapsible collapsed" id="cardAlgo">
+        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">⚙</span>算法参数<span class="col-arrow">▾</span></h3>
+        <div class="body">
+          <div class="grid2">
+            <div class="field">
+              <label>最小支撑率 <span id="labSup" class="val">75%</span></label>
+              <input type="range" id="rgSupport" min="0" max="100" step="5" value="75">
+            </div>
+            <div class="field">
+              <label>最多柜数</label>
+              <input type="number" id="inMaxCtn" value="20" min="1" max="60">
+            </div>
+          </div>
+          <p class="hint">支撑率越高越稳妥（货物底面须被下层托住的比例）；越低则装载率越高。</p>
         </div>
       </div>
 
@@ -166,8 +149,13 @@
         </div>
       </div>
 
-      <!-- 数据操作（默认折叠） -->
-      <div class="card card-collapsible collapsed" id="cardOps">
+      <!-- 开始排柜（主操作按钮，置底） -->
+      <div class="calc-bar">
+        <button class="btn btn-calc-main" id="btnCalc">▶ 开始排柜</button>
+      </div>
+
+      <!-- 数据与工程（隐藏保留，按钮仍可用） -->
+      <div class="card card-collapsible collapsed" id="cardOps" style="display:none">
         <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">☰</span>数据与工程<span class="col-arrow">▾</span></h3>
         <div class="body">
           <div class="grid2 btn-grid">
@@ -181,13 +169,15 @@
         </div>
       </div>
 
+      <!-- 收起按钮（左侧边缘中间，三角图标） -->
+      <button class="collapse-pin collapse-pin-left" id="toggleLeft" title="收起左侧面板">◀</button>
+
       <div style="height:2px"></div>
     </section>
 
     <!-- ============ 中栏：3D ============ -->
     <section class="col col-center">
       <div class="toolbar toolbar-action">
-        <button class="btn primary btn-calc" id="btnCalc">▶ 计算装柜方案</button>
         <div class="ctn-tabs" id="ctnTabs"><span class="hint">尚未计算</span></div>
       </div>
 

@@ -86,7 +86,7 @@ button, input, select, textarea { font-family: inherit; font-size: var(--f-body)
   overflow: hidden;
   position: relative;
 }
-.col-left  { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+.col-left  { overflow-y: auto; overflow-x: hidden; padding-right: 4px; position: relative; }
 .col-right { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
 .col-center { gap: 10px; }
 
@@ -155,6 +155,31 @@ button, input, select, textarea { font-family: inherit; font-size: var(--f-body)
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.active { background: var(--brand); border-color: var(--brand); color: #fff; }
 
+/* 开始排柜 · 左侧底主按钮 */
+.calc-bar {
+  padding: 14px 4px 6px;
+  flex-shrink: 0;
+}
+.btn-calc-main {
+  width: 100%;
+  padding: 13px 20px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--brand), #3b82f6);
+  border: none;
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(37,99,235,.38), 0 1px 3px rgba(0,0,0,.1);
+  cursor: pointer;
+  transition: transform .12s, box-shadow .18s, filter .18s;
+}
+.btn-calc-main:hover {
+  box-shadow: 0 6px 24px rgba(37,99,235,.48), 0 2px 6px rgba(0,0,0,.12);
+  filter: brightness(1.06);
+}
+.btn-calc-main:active { transform: translateY(2px); box-shadow: 0 2px 10px rgba(37,99,235,.32); }
+
 /* ============ 卡片 ============ */
 .card {
   background: var(--surface);
@@ -166,14 +191,15 @@ button, input, select, textarea { font-family: inherit; font-size: var(--f-body)
 }
 .card > h3 {
   margin: 0;
-  padding: 9px 13px;
-  font-size: var(--f-title);
-  font-weight: 600;
+  padding: 11px 14px;
+  font-size: 15px;
+  font-weight: 700;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border-2);
   display: flex; align-items: center; gap: 7px;
+  letter-spacing: .3px;
 }
-.card > h3 .ico { color: var(--brand); font-size: 13px; }
+.card > h3 .ico { color: var(--brand); font-size: 15px; }
 .card > h3 .right { margin-left: auto; font-weight: 500; font-size: var(--f-sm); color: var(--text-3); }
 .card > h3 .right b { color: var(--text); }
 .card > h3 .right.danger { color: var(--danger); }
@@ -292,6 +318,71 @@ input[type=range] { accent-color: var(--brand); cursor: pointer; width: 100%; }
 .cargo-table tbody tr:hover { background: var(--brand-50); }
 .cargo-table tbody tr.pending { background: #fff7ed; }
 .cargo-table tbody tr.pending:hover { background: #ffedd9; }
+/* 货物清单卡片：flex 布局 */
+.cargo-body { display: flex; flex-direction: column; padding: 0 !important; }
+.cargo-body .table-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.cargo-body .empty { padding: 18px 8px; flex-shrink: 0; }
+
+/* 右侧顶部导入操作条 */
+.import-bar {
+  display: flex; gap: 7px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+.btn-import-main {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--brand), #4f8bff) !important;
+  border-color: var(--brand) !important;
+  box-shadow: 0 2px 10px rgba(37,99,235,.32);
+}
+.btn-import-main:hover {
+  filter: brightness(1.08); box-shadow: 0 4px 16px rgba(37,99,235,.44) !important;
+}
+.btn-import-sub {
+  font-weight: 600;
+  border-color: var(--brand) !important;
+  color: var(--brand) !important;
+  background: var(--brand-50) !important;
+}
+.btn-import-sub:hover { background: var(--brand-100) !important; }
+.btn-import-ghost { font-size: var(--f-xs); }
+
+/* 左侧边缘收起按钮（三角图标） */
+.collapse-pin {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+  z-index: 30;
+  width: 22px;
+  height: 40px;
+  background: var(--surface);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  transition: all .15s;
+  box-shadow: 2px 0 6px rgba(16,24,40,.08);
+}
+.collapse-pin:hover {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  box-shadow: 3px 0 12px rgba(37,99,235,.28);
+}
 .swatch { width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); display: inline-block; vertical-align: -2px; cursor: pointer; }
 .cargo-name { font-weight: 600; display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .cargo-sub { color: var(--text-3); font-size: 10.5px; }
