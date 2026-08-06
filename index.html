@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>集装箱装柜排柜模拟系统</title>
+<title>装柜规划工作台 · Container Load Planner</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,53 +11,68 @@
 <div id="app">
 
   <!-- ============ 顶栏 ============ -->
-  <div id="topbar">
-    <div class="logo"><span class="dot"></span>集装箱装柜排柜模拟系统<span class="sub">Load Calculator · 纯本地离线运行</span></div>
-    <div class="spacer"></div>
-    <div class="tb-group">
-      <button class="btn ghost" id="btnImportTpl" title="一键导入本公司装箱单模板（Packing List）">📋 导入装箱单</button>
-      <button class="btn ghost" id="btnImportAny" title="导入任意 Excel / CSV">📂 导入 Excel</button>
-      <button class="btn ghost" id="btnTplDown" title="下载标准导入模板">⬇ 模板</button>
-      <span class="sep" style="width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 4px"></span>
-      <button class="btn ghost" id="btnExpImg">🖼 导出图片</button>
-      <button class="btn ghost" id="btnExpPdf">📄 导出 PDF</button>
-      <button class="btn ghost" id="btnExpXls">📊 导出明细</button>
-      <button class="btn ghost" id="btnToggleRight" title="统计面板">📈</button>
+  <header id="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round">
+          <path d="M3 7l9-4 9 4v10l-9 4-9-4V7z"/><path d="M3 7l9 4 9-4M12 11v10"/>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <span class="brand-name">装柜规划工作台</span>
+        <span class="brand-sub">Container Load Planner</span>
+      </div>
     </div>
-  </div>
+
+    <div class="spacer"></div>
+
+    <nav class="tb-actions">
+      <div class="tb-group">
+        <button class="btn ghost" id="btnImportTpl" title="导入本公司标准装箱单（Packing List）">＋ 导入装箱单</button>
+        <button class="btn ghost" id="btnImportAny" title="导入任意 Excel / CSV 文件">导入 Excel</button>
+      </div>
+      <span class="tb-sep"></span>
+      <div class="tb-group">
+        <button class="btn ghost" id="btnTplDown" title="下载标准导入模板">模板</button>
+        <button class="btn ghost" id="btnExpImg" title="导出当前柜 3D 截图">图片</button>
+        <button class="btn ghost" id="btnExpPdf" title="导出完整装柜方案 PDF">PDF</button>
+        <button class="btn ghost" id="btnExpXls" title="导出装柜明细表">明细</button>
+      </div>
+      <span class="tb-sep"></span>
+      <button class="btn icon" id="btnToggleRight" title="显示 / 隐藏统计面板">📊</button>
+    </nav>
+  </header>
 
   <div id="main">
 
-    <!-- ============ 步骤指引 ============ -->
-    <div class="col col-left" id="colLeft">
+    <!-- ============ 左栏：设置 ============ -->
+    <section class="col col-left" id="colLeft">
 
-      <!-- 步骤指引条（含收起按钮） -->
+      <!-- 步骤指引 -->
       <div class="step-guide" id="stepGuide">
         <div class="sg-step sg-active" data-step="1" data-target="cardSpec">
-          <span class="sg-num">①</span><span class="sg-txt">选柜型</span>
+          <span class="sg-num">1</span><span class="sg-txt">选柜型</span>
         </div>
-        <div class="sg-arrow">→</div>
+        <div class="sg-rail"></div>
         <div class="sg-step" data-step="2" data-target="cardCargo">
-          <span class="sg-num">②</span><span class="sg-txt">填货物</span>
+          <span class="sg-num">2</span><span class="sg-txt">录货物</span>
         </div>
-        <div class="sg-arrow">→</div>
+        <div class="sg-rail"></div>
         <div class="sg-step" data-step="3">
-          <span class="sg-num">③</span><span class="sg-txt">点计算</span>
+          <span class="sg-num">3</span><span class="sg-txt">算方案</span>
         </div>
-        <div class="sg-arrow">→</div>
+        <div class="sg-rail"></div>
         <div class="sg-step" data-step="4" data-target="colRight">
-          <span class="sg-num">④</span><span class="sg-txt">看结果</span>
+          <span class="sg-num">4</span><span class="sg-txt">看结果</span>
         </div>
-        <button class="collapse-btn" id="toggleLeft" title="收起左侧面板">◀ 收起</button>
+        <button class="collapse-btn" id="toggleLeft" title="收起左侧面板">收起 ›</button>
       </div>
 
       <!-- ① 集装箱规格 -->
       <div class="card" id="cardSpec">
-        <h3><span class="ico">▣</span>① 选集装箱规格
-          <span class="right" id="ctnVolLab"></span>
-        </h3>
+        <h3><span class="ico">▦</span>选择集装箱<span class="right" id="ctnVolLab"></span></h3>
         <div class="body">
-          <div class="field" style="margin-bottom:8px">
+          <div class="field" style="margin-bottom:10px">
             <label>柜型</label>
             <select id="selContainer"></select>
           </div>
@@ -65,90 +80,87 @@
             <div class="field"><label>内长 mm</label><input type="number" id="inCtnL"></div>
             <div class="field"><label>内宽 mm</label><input type="number" id="inCtnW"></div>
             <div class="field"><label>内高 mm</label><input type="number" id="inCtnH"></div>
-            <div class="field"><label>载重 kg</label><input type="number" id="inCtnMax"></div>
+            <div class="field"><label>限重 kg</label><input type="number" id="inCtnMax"></div>
           </div>
-          <div class="row" style="margin-top:8px">
-            <button class="btn sm" id="btnRecommend" style="flex:1">🔍 柜型推荐</button>
-            <label class="check" style="flex:1"><input type="checkbox" id="ckMulti" checked>装不下自动开新柜</label>
+          <div class="row action-row">
+            <button class="btn primary sm" id="btnRecommend" style="flex:1">⚙ 柜型推荐</button>
+            <label class="check" style="flex:1.4"><input type="checkbox" id="ckMulti" checked>装不下自动加柜</label>
           </div>
         </div>
       </div>
 
       <!-- 算法参数（默认折叠） -->
       <div class="card card-collapsible collapsed" id="cardAlgo">
-        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">⚙</span>⚙ 高级设置
-          <span class="col-arrow">▸</span>
-        </h3>
+        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">⚙</span>算法参数<span class="col-arrow">▾</span></h3>
         <div class="body">
           <div class="grid2">
             <div class="field">
-              <label>最小支撑率 <span id="labSup">75%</span></label>
-              <input type="range" id="rgSupport" min="0" max="100" step="5" value="75" style="padding:0">
+              <label>最小支撑率 <span id="labSup" class="val">75%</span></label>
+              <input type="range" id="rgSupport" min="0" max="100" step="5" value="75">
             </div>
             <div class="field">
-              <label>最大柜数上限</label>
+              <label>最多柜数</label>
               <input type="number" id="inMaxCtn" value="20" min="1" max="60">
             </div>
           </div>
-          <div class="hint" style="margin-top:6px">支撑率越高越稳妥（货物底面须被下层托住的比例），越低装载率越高。</div>
+          <p class="hint">支撑率越高越稳妥（货物底面须被下层托住的比例）；越低则装载率越高。</p>
         </div>
       </div>
 
-      <!-- ② 货物清单（核心，始终展开） -->
-      <div class="card flex" id="cardCargo" style="min-height:220px">
-        <h3><span class="ico">▤</span>② 填写货物
-          <span class="right"><span id="cargoCount">0</span> 种 / <span id="cargoQty">0</span> 箱</span>
-        </h3>
+      <!-- ② 货物清单 -->
+      <div class="card flex" id="cardCargo" style="min-height:240px">
+        <h3><span class="ico">▤</span>货物清单<span class="right"><b id="cargoCount">0</b> 种 · <b id="cargoQty">0</b> 箱</span></h3>
         <div class="body" style="padding:0">
-          <table class="cargo-table">
-            <thead>
-              <tr>
-                <th style="width:22px"></th>
-                <th>品名</th>
-                <th style="width:112px">长×宽×高</th>
-                <th style="width:42px" class="num">箱数</th>
-                <th style="width:52px" class="num">单重</th>
-                <th style="width:34px">堆</th>
-                <th style="width:56px">方向</th>
-                <th style="width:38px"></th>
-              </tr>
-            </thead>
-            <tbody id="cargoBody"></tbody>
-          </table>
-          <div class="empty" id="cargoEmpty">暂无货物，请导入装箱单或加载示例数据</div>
+          <div class="table-scroll">
+            <table class="cargo-table">
+              <thead>
+                <tr>
+                  <th style="width:22px"></th>
+                  <th class="col-name">品名</th>
+                  <th style="width:100px">长×宽×高</th>
+                  <th style="width:40px" class="num">箱</th>
+                  <th style="width:46px" class="num">单重</th>
+                  <th style="width:30px">叠</th>
+                  <th style="width:54px">方向</th>
+                  <th style="width:48px">底面</th>
+                  <th style="width:30px"></th>
+                </tr>
+              </thead>
+              <tbody id="cargoBody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="cargoEmpty">还没有货物，导入装箱单或点下方「添加」</div>
         </div>
       </div>
 
       <!-- 新增货物（紧凑版） -->
       <div class="card card-collapsible collapsed" id="cardAdd">
-        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">＋</span>➕ 添加新货物
-          <span class="col-arrow">▸</span>
-        </h3>
+        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">＋</span>手动添加货物<span class="col-arrow">▾</span></h3>
         <div class="body">
-          <div class="row" style="margin-bottom:7px">
+          <div class="row" style="margin-bottom:8px">
             <div class="field" style="flex:2"><label>品名</label><input type="text" id="nfName" placeholder="例：大纸箱 A"></div>
             <div class="field" style="flex:1"><label>箱号</label><input type="text" id="nfCtn" placeholder="选填"></div>
           </div>
-          <div class="grid4" style="margin-bottom:7px">
+          <div class="grid4" style="margin-bottom:8px">
             <div class="field"><label>长 mm</label><input type="number" id="nfL" value="1200"></div>
             <div class="field"><label>宽 mm</label><input type="number" id="nfW" value="800"></div>
             <div class="field"><label>高 mm</label><input type="number" id="nfH" value="900"></div>
             <div class="field"><label>数量</label><input type="number" id="nfQty" value="1" min="1"></div>
           </div>
-          <div class="row" style="margin-bottom:7px; align-items:flex-end">
+          <div class="row" style="margin-bottom:8px; align-items:flex-end">
             <div class="field" style="flex:1"><label>单箱重 kg</label><input type="number" id="nfWt" value="50" step="0.01"></div>
-            <div class="field" style="flex:1.3"><label>允许摆放方向</label>
+            <div class="field" style="flex:1.3"><label>摆放方向</label>
               <select id="nfRot">
-                <option value="upright">仅水平旋转（不可倒置）</option>
-                <option value="free">任意翻转（6 向）</option>
+                <option value="upright">仅水平旋转</option>
+                <option value="free">任意翻转</option>
                 <option value="none">固定朝向</option>
               </select>
             </div>
-            <div class="field" style="flex:.6"><label>颜色</label><input type="color" id="nfColor" value="#3498db" style="padding:1px;height:28px"></div>
+            <div class="field" style="flex:.7"><label>颜色</label><input type="color" id="nfColor" value="#3498db"></div>
           </div>
           <div class="row" style="align-items:center">
-            <label class="check" style="flex:1"><input type="checkbox" id="nfStack" checked>可被堆叠承压</label>
-            <div class="field" style="flex:1"><label>最多叠放层数(0=不限)</label><input type="number" id="nfLayers" value="0" min="0"></div>
+            <label class="check" style="flex:1"><input type="checkbox" id="nfStack" checked>可被堆叠</label>
+            <div class="field" style="flex:1"><label>最多叠层 (0=不限)</label><input type="number" id="nfLayers" value="0" min="0"></div>
             <button class="btn primary" id="btnAddCargo" style="flex:0 0 auto">添加</button>
           </div>
         </div>
@@ -156,46 +168,44 @@
 
       <!-- 数据操作（默认折叠） -->
       <div class="card card-collapsible collapsed" id="cardOps">
-        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">☰</span>📂 数据管理
-          <span class="col-arrow">▸</span>
-        </h3>
+        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">☰</span>数据与工程<span class="col-arrow">▾</span></h3>
         <div class="body">
-          <div class="grid2" style="gap:6px">
-            <button class="btn sm" id="btnSample1">载入装箱单示例</button>
-            <button class="btn sm" id="btnSample2">载入通用示例</button>
-            <button class="btn sm" id="btnExpCargo">导出货物清单</button>
-            <button class="btn sm" id="btnSaveJson">保存工程(JSON)</button>
-            <button class="btn sm" id="btnLoadJson">读取工程(JSON)</button>
+          <div class="grid2 btn-grid">
+            <button class="btn sm" id="btnSample1">示例·装箱单</button>
+            <button class="btn sm" id="btnSample2">示例·通用</button>
+            <button class="btn sm" id="btnExpCargo">导出清单</button>
+            <button class="btn sm" id="btnSaveJson">保存工程</button>
+            <button class="btn sm" id="btnLoadJson">读取工程</button>
             <button class="btn sm danger" id="btnClear">清空全部</button>
           </div>
         </div>
       </div>
 
       <div style="height:2px"></div>
-    </div>
+    </section>
 
     <!-- ============ 中栏：3D ============ -->
-    <div class="col">
-      <div class="toolbar">
-        <button class="btn primary" id="btnCalc">🚀 开始计算装柜</button>
-        <div class="sep"></div>
-        <span class="lab">柜：</span>
+    <section class="col col-center">
+      <div class="toolbar toolbar-action">
+        <button class="btn primary btn-calc" id="btnCalc">▶ 计算装柜方案</button>
         <div class="ctn-tabs" id="ctnTabs"><span class="hint">尚未计算</span></div>
       </div>
 
-      <div class="toolbar">
+      <div class="toolbar toolbar-view">
         <span class="lab">视角</span>
-        <button class="btn xs" data-view="iso">等轴</button>
-        <button class="btn xs" data-view="iso2">反向轴测</button>
-        <button class="btn xs" data-view="top">俯视</button>
-        <button class="btn xs" data-view="front">侧视</button>
-        <button class="btn xs" data-view="side">柜门视</button>
-        <div class="sep"></div>
+        <div class="seg">
+          <button class="btn xs" data-view="iso">等轴</button>
+          <button class="btn xs" data-view="iso2">反向</button>
+          <button class="btn xs" data-view="top">俯视</button>
+          <button class="btn xs" data-view="front">侧视</button>
+          <button class="btn xs" data-view="side">柜门</button>
+        </div>
+        <span class="sep"></span>
         <span class="lab">外壳</span>
-        <select id="selShell" style="width:88px;padding:3px 5px">
+        <select id="selShell" class="mini-select">
           <option value="glass">半透明</option>
-          <option value="solid">加深</option>
-          <option value="wire">仅线框</option>
+          <option value="solid">实体</option>
+          <option value="wire">线框</option>
           <option value="hidden">隐藏</option>
         </select>
         <label class="check"><input type="checkbox" id="ckGrid" checked>地面网格</label>
@@ -206,7 +216,7 @@
         <canvas id="gl"></canvas>
         <div class="overlay-badge" id="glBadge" style="display:none"></div>
         <div class="legend" id="legend" style="display:none"></div>
-        <div class="overlay-hint">左键旋转 · 滚轮缩放 · 右键平移 · 点击货物查看详情</div>
+        <div class="overlay-hint">左键旋转 · 滚轮缩放 · 右键平移 · 点击货物看详情</div>
       </div>
 
       <div class="toolbar player">
@@ -215,21 +225,21 @@
         <button class="btn sm" id="btnStepF">▶</button>
         <input type="range" id="rgSeq" min="0" max="0" value="0">
         <span class="seq" id="seqLab">0 / 0</span>
-        <select id="selSpeed" style="width:74px;padding:3px 5px">
+        <select id="selSpeed" class="mini-select">
           <option value="600">慢速</option>
           <option value="320" selected>常速</option>
           <option value="140">快速</option>
         </select>
         <button class="btn sm" id="btnAll">全部显示</button>
       </div>
-    </div>
+    </section>
 
     <!-- ============ 右栏：统计 ============ -->
-    <div class="col col-right" id="colRight">
+    <aside class="col col-right" id="colRight">
       <div class="card">
         <div class="card-header-row">
           <h3><span class="ico">📊</span>方案总览</h3>
-          <button class="collapse-btn" id="toggleRight" title="收起右侧面板">收起 ▶</button>
+          <button class="collapse-btn" id="toggleRight" title="收起右侧面板">‹ 收起</button>
         </div>
         <div class="body" id="summaryBox"><div class="empty">尚未计算</div></div>
       </div>
@@ -250,21 +260,21 @@
       </div>
 
       <div class="card">
-        <h3><span class="ico">⚠</span>未装入货物 <span class="right" id="unpackCount">0</span></h3>
+        <h3><span class="ico">⚠</span>未装入货物 <span class="right danger" id="unpackCount">0</span></h3>
         <div class="body" id="unpackBox"><div class="hint">无</div></div>
       </div>
       <div style="height:2px"></div>
-    </div>
+    </aside>
 
     <!-- 展开按钮（栏隐藏时显示） -->
-    <button class="expand-pin expand-pin-left" id="expandLeft" style="display:none" title="展开左侧面板">◀ 左侧 ▶</button>
-    <button class="expand-pin expand-pin-right" id="expandRight" style="display:none" title="展开右侧面板">◀ 右侧 ▶</button>
+    <button class="expand-pin expand-pin-left" id="expandLeft" style="display:none" title="展开左侧面板">‹ 左</button>
+    <button class="expand-pin expand-pin-right" id="expandRight" style="display:none" title="展开右侧面板">右 ›</button>
 
   </div>
 </div>
 
 <div id="toast"></div>
-<div id="loading"><div class="spinner"></div><div id="loadText" style="font-size:13px;color:#3a4a5e">正在计算…</div></div>
+<div id="loading"><div class="spinner"></div><div id="loadText" class="load-text">正在计算…</div></div>
 <div id="modalHost"></div>
 
 <input type="file" id="fileXlsx" accept=".xlsx,.xls,.csv" style="display:none">

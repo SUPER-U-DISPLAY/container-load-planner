@@ -102,6 +102,39 @@
   /* ================= 货物表 ================= */
   var ROT_LABEL = { free: '任意', upright: '水平', none: '固定' };
 
+  // 等轴测 mini 立方体：高亮贴柜底那一面（底面=长×宽为默认；自由模式标自动）
+  function boxSVG(c) {
+    if (c.pending || !(c.l > 0 && c.w > 0 && c.h > 0)) return '<div class="foot-empty">?</div>';
+    var bx, by, bz, tag, sub, col = c.color || '#3a7bd5';
+    if (c._placedDim) {                       // 算完后：按实际摆放维度画
+      bx = c._placedDim.dx; by = c._placedDim.dy; bz = c._placedDim.dz;
+      tag = '实摆'; sub = Math.round(bx) + '×' + Math.round(by);
+    } else if (c.rotateMode === 'free') {     // 任意：录入时未知朝向
+      bx = c.l; by = c.w; bz = c.h; tag = '自动'; sub = '算后定';
+    } else {                                  // 水平/固定：底面恒为长×宽（平躺）
+      bx = c.l; by = c.w; bz = c.h;
+      tag = (c.rotateMode === 'none') ? '固定' : '平卧';
+      sub = Math.round(c.l) + '×' + Math.round(c.w);
+    }
+    var a = 0.866, b = 0.5;
+    var O = [0, 0], A = [a * bx, -b * bx], Bm = [-a * by, -b * by], Cm = [a * (bx - by), -b * (bx + by)];
+    var O2 = [0, -bz], A2 = [a * bx, -b * bx - bz], B2 = [-a * by, -b * by - bz], C2 = [a * (bx - by), -b * (bx + by) - bz];
+    var pts = [O, A, Bm, Cm, O2, A2, B2, C2];
+    var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+    var minx = Math.min.apply(null, xs), maxx = Math.max.apply(null, xs);
+    var miny = Math.min.apply(null, ys), maxy = Math.max.apply(null, ys);
+    var W = 44, H = 48, pad = 3, s = Math.min((W - 2 * pad) / (maxx - minx || 1), (H - 2 * pad) / (maxy - miny || 1));
+    function P(p) { return [(p[0] - minx) * s + pad, (p[1] - miny) * s + pad]; }
+    function poly(arr) { return arr.map(function (p) { var q = P(p); return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' '); }
+    var svg = '<svg class="foot-mini" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" aria-hidden="true">';
+    svg += '<polygon points="' + poly([O, A, Cm, Bm]) + '" fill="' + col + '" stroke="' + col + '" stroke-width="1" stroke-linejoin="round"/>';
+    svg += '<polygon points="' + poly([O, Bm, B2, O2]) + '" fill="' + col + '33" stroke="' + col + '" stroke-width="0.8" stroke-linejoin="round"/>';
+    svg += '<polygon points="' + poly([O, A, A2, O2]) + '" fill="' + col + '55" stroke="' + col + '" stroke-width="0.8" stroke-linejoin="round"/>';
+    svg += '<polygon points="' + poly([O2, A2, C2, B2]) + '" fill="#ffffff" stroke="' + col + '" stroke-width="0.8" stroke-linejoin="round" opacity="0.85"/>';
+    svg += '</svg><span class="foot-tag">' + tag + '</span><span class="foot-sub">' + sub + '</span>';
+    return svg;
+  }
+
   function renderCargoTable() {
     var tb = $('cargoBody'), html = '', totQty = 0;
     S.cargos.forEach(function (c, i) {
@@ -120,6 +153,7 @@
         '<td><select data-f="rotateMode" style="padding:1px 2px;font-size:11.5px">' +
           ['upright', 'free', 'none'].map(function (k) { return '<option value="' + k + '"' + (c.rotateMode === k ? ' selected' : '') + '>' + ROT_LABEL[k] + '</option>'; }).join('') +
           '</select></td>' +
+        '<td class="foot-td" title="姿态示意：高亮面 = 贴柜底（底面）">' + boxSVG(c) + '</td>' +
         '<td style="text-align:center"><button class="btn xs danger" data-act="del">×</button></td>' +
         '</tr>';
     });
@@ -136,6 +170,7 @@
       var c = S.cargos[+tr.dataset.i]; if (!c) return;
       var f = e.target.dataset.f;
       if (!f) return;
+      delete c._placedDim;   // 录入改动后旧摆放结果失效，小盒回到三档显示
       if (f === 'stackable') c.stackable = e.target.checked;
       else if (f === 'rotateMode') c.rotateMode = e.target.value;
       else {
@@ -182,6 +217,18 @@
         var ms = Math.round(performance.now() - t0);
         S.cur = 0;
         renderResult();
+        // 回写实际摆放维度到货物清单（供小盒显示真实姿态）
+        var seen = {};
+        S.result.containers.forEach(function (ct) {
+          ct.items.forEach(function (it) {
+            if (it.cargoId == null || seen[it.cargoId]) return;
+            seen[it.cargoId] = true;
+            for (var k = 0; k < S.cargos.length; k++) {
+              if (S.cargos[k].id === it.cargoId) { S.cargos[k]._placedDim = { dx: it.dx, dy: it.dy, dz: it.dz }; break; }
+            }
+          });
+        });
+        renderCargoTable();
         var s = S.result.summary;
         toast('计算完成：' + s.containerCount + ' 个柜，装入 ' + s.packedUnits + '/' + s.totalUnits +
           ' 箱，平均利用率 ' + pct(s.avgVolumeRate) + '（耗时 ' + ms + 'ms）',
