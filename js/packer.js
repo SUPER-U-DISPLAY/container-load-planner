@@ -356,27 +356,6 @@
     return units;
   }
 
-  /* ---------- 重心平衡：货未装满时整体沿柜长平移，使重心靠近柜中心 ---------- */
-  function balance(spec, placed) {
-    if (!placed.length) return;
-    var i, p, wt = 0, cx = 0, maxX = 0, minX = Infinity;
-    for (i = 0; i < placed.length; i++) {
-      p = placed[i];
-      wt += p.weight;
-      cx += (p.x + p.dx / 2) * p.weight;
-      if (p.x + p.dx > maxX) maxX = p.x + p.dx;
-      if (p.x < minX) minX = p.x;
-    }
-    if (wt <= 0) return;
-    var room = spec.L - maxX;
-    if (room < 1) return;
-    var shift = spec.L / 2 - cx / wt;
-    if (shift <= 0) return;                 // 重心已偏柜门，不动
-    shift = Math.min(shift, room);
-    if (shift < 1) return;
-    for (i = 0; i < placed.length; i++) placed[i].x += shift;
-  }
-
   /* ---------- 单柜多方案择优 ---------- */
   function packOne(spec, units, opt) {
     var n = units.length;
@@ -397,7 +376,6 @@
           var r = pk.tryPlace(sorted[i]);
           if (r) placed.push(r); else left.push(sorted[i]);
         }
-        if (opt.balanceCog !== false) balance(spec, placed);
         var st = statsOf(spec, placed);
         var score = placed.length * 1e6 + st.volumeRate * 1000;
         if (!best || score > best.score) {
