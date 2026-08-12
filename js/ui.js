@@ -210,7 +210,8 @@
         var opt = {
           supportRatio: (+$('rgSupport').value || 75) / 100,
           maxContainers: +$('inMaxCtn').value || 20,
-          multiContainer: $('ckMulti').checked
+          multiContainer: $('ckMulti').checked,
+          sameKindFirst: $('ckSameKind') ? $('ckSameKind').checked : false
         };
         var t0 = performance.now();
         S.result = Packer.pack(usable, S.spec, opt);

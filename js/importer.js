@@ -153,7 +153,14 @@
         var row = grid[r] || [];
         var nonEmpty = row.filter(function (v) { return v !== null && v !== ''; }).length;
         if (nonEmpty === 0) continue;
-        if (isStopRow(row)) break;
+        // 结束判定：定位到品名列时，以「品名列为空」为尽头（避免备注含「合计」等被误杀）；
+        // 未定位品名列时，退回原有关键字汇总行停止逻辑兜底。
+        if (m.name !== undefined) {
+          var nm0 = row[m.name];
+          if (nm0 === null || nm0 === undefined || String(nm0).replace(/\s/g, '') === '') break;
+        } else if (isStopRow(row)) {
+          break;
+        }
 
         var nm = m.name !== undefined ? row[m.name] : null;
         var L = numOf(row[D[0]]) * unitScale;

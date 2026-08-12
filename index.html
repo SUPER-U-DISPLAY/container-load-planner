@@ -100,7 +100,7 @@
 
       <!-- ③ 算法参数（默认折叠） -->
       <div class="card card-collapsible collapsed" id="cardAlgo">
-        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">⚙</span>算法参数<span class="col-arrow">▾</span></h3>
+        <h3 class="collapser" onclick="this.parentElement.classList.toggle('collapsed')"><span class="ico">⚙</span>装柜逻辑<span class="col-arrow">▾</span></h3>
         <div class="body">
           <div class="grid2">
             <div class="field">
@@ -112,6 +112,7 @@
               <input type="number" id="inMaxCtn" value="20" min="1" max="60">
             </div>
           </div>
+          <label class="check" style="display:block;margin-top:10px"><input type="checkbox" id="ckSameKind"> 同类优先叠放<span style="font-weight:400;color:var(--text-3);font-size:11px;margin-left:4px">（同款货上下堆叠成一摞，便于清点，可能略降装载率）</span></label>
           <p class="hint">支撑率越高越稳妥（货物底面须被下层托住的比例）；越低则装载率越高。</p>
         </div>
       </div>

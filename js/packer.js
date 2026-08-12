@@ -258,6 +258,15 @@
         var score = dbl
           ? (b.x * 1e7 + b.z * 1e3 + b.y + b.dz * 1e-3)
           : (b.z * 1e7 + b.x * 1e3 + b.y + b.dz * 1e-3);
+        if (this.opt.sameKindFirst) {
+          // 同类优先：落点与已放同类箱(x,y)对齐(正上方堆叠)则大幅加权，使其堆成一摞
+          for (var pi = 0; pi < this.placed.length; pi++) {
+            var pp = this.placed[pi];
+            if (pp.cargoId === unit.cargoId && Math.abs(pp.x - b.x) < TOL + 0.5 && Math.abs(pp.y - b.y) < TOL + 0.5) {
+              score -= 1e12; break;
+            }
+          }
+        }
         if (score < bestScore) {
           bestScore = score;
           bestPrim = dbl ? b.x : b.z;
@@ -359,11 +368,31 @@
   /* ---------- 单柜多方案择优 ---------- */
   function packOne(spec, units, opt) {
     var n = units.length;
-    var strat = STRATEGIES;
-    var modes = [true, false];             // dblFirst: 深度优先 / 贴地优先
-    if (n > 200) { strat = STRATEGIES.slice(0, 3); }
-    if (n > 450) { strat = STRATEGIES.slice(0, 2); modes = [true]; }
-    if (n > 1200) { strat = STRATEGIES.slice(0, 1); modes = [true]; }
+    var strat, modes;
+    if (opt.sameKindFirst) {
+      // 同类优先：按货号(cargoId)分组，组间按组体积降序，组内按体积降序
+      var gv = {};
+      for (var gi = 0; gi < n; gi++) {
+        var _cid = units[gi].cargoId;
+        if (gv[_cid] === undefined) gv[_cid] = 0;
+        gv[_cid] += units[gi].l * units[gi].w * units[gi].h;
+      }
+      var gkeys = Object.keys(gv).sort(function (a, b) { return gv[b] - gv[a]; });
+      var gorder = {};
+      for (var gk = 0; gk < gkeys.length; gk++) gorder[gkeys[gk]] = gk;
+      strat = [{ key: 'samekind', label: '同类优先', fn: function (a, b) {
+        var ga = gorder[a.cargoId], gb = gorder[b.cargoId];
+        if (ga !== gb) return ga - gb;
+        return (b.l * b.w * b.h) - (a.l * a.w * a.h);
+      } }];
+      modes = [true, false];
+    } else {
+      strat = STRATEGIES;
+      modes = [true, false];             // dblFirst: 深度优先 / 贴地优先
+      if (n > 200) { strat = STRATEGIES.slice(0, 3); }
+      if (n > 450) { strat = STRATEGIES.slice(0, 2); modes = [true]; }
+      if (n > 1200) { strat = STRATEGIES.slice(0, 1); modes = [true]; }
+    }
 
     var best = null;
     for (var m = 0; m < modes.length; m++) {
