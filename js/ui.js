@@ -630,7 +630,8 @@
     initContainerSelect();
     bindCargoTable();
 
-    if (!restore()) { S.cargos = SampleData.qatar(); S.title = SampleData.QATAR_TITLE; }
+    // 首屏默认空白：由用户自行导入箱单或添加物品，不再预载示例/自动恢复旧草稿
+    S.cargos = [];
     renderCargoTable();
 
     /* 顶栏 */
