@@ -62,65 +62,62 @@
 
   /* ================= 集装箱 ================= */
   /* S.ctnSpecs = [{ spec: ContainerPreset, qty: number }, ...]  手动选型列表 */
-  function initContainerSelect() {
-    var sel = $('selContainer');
-    var html = ContainerLib.PRESETS.filter(function (p) { return p.id !== 'LCL'; }).map(function (p) {
-      return '<option value="' + p.id + '">' + p.name + '</option>';
-    }).join('');
-    sel.innerHTML = html;
-    sel.value = '40HQ';
+  /* ================= 柜型配置（每行 = 一个柜型，行内编辑） ================= */
+  var _ctnTypeOpts = ContainerLib.PRESETS.filter(function (p) { return p.id !== 'LCL'; }).map(function (p) {
+    return '<option value="' + p.id + '">' + p.name + '</option>';
+  }).join('');
 
-    // 默认预填一个 40HQ
+  function initContainerSelect() {
+    // 默认预填一行 40HQ
     if (!S.ctnSpecs || !S.ctnSpecs.length) {
       S.ctnSpecs = [{ spec: ContainerLib.byId('40HQ'), qty: 1 }];
     }
     renderCtnList();
     updCtnVolLab();
-
-    // 添加按钮
-    $('btnAddCtn').addEventListener('click', addCtnFromSelect);
+    $('btnAddCtnRow').addEventListener('click', function () {
+      S.ctnSpecs.push({ spec: ContainerLib.byId('20GP'), qty: 1 });
+      renderCtnList(); updCtnVolLab(); save();
+    });
   }
 
-  /** 从下拉框+数量添加一个柜型到列表 */
-  function addCtnFromSelect() {
-    var typeId = $('selContainer').value;
-    var qty = Math.max(1, Math.min(50, +$('inCtnQty').value || 1));
-    var spec = ContainerLib.byId(typeId);
-    if (!spec) return;
-    // 如果已有同类型则合并数量
-    var found = false;
-    for (var i = 0; i < S.ctnSpecs.length; i++) {
-      if (S.ctnSpecs[i].spec.id === typeId) {
-        S.ctnSpecs[i].qty += qty; found = true; break;
-      }
-    }
-    if (!found) S.ctnSpecs.push({ spec: spec, qty: qty });
-    renderCtnList(); updCtnVolLab(); save();
-    toast('已添加 ' + spec.name + ' ×' + qty, 'ok');
-  }
-
-  /** 渲染手动选型列表 */
+  /** 渲染每行：[柜型▼] [数量] [容积] [×] */
   function renderCtnList() {
     var el = $('ctnList');
     if (!S.ctnSpecs.length) {
-      el.innerHTML = '<span class="hint" style="font-size:11px">尚未添加柜型，请从上方选择并添加</span>';
+      el.innerHTML = '<span class="hint" style="font-size:11px">点击下方「添加柜型」开始配置</span>';
       return;
     }
     var html = '';
     S.ctnSpecs.forEach(function (item, idx) {
       var s = item.spec;
       var vol = fmt(ContainerLib.volumeCbm(s), 1);
-      html += '<div class="ctn-list-item">' +
-        '<span class="ctn-name">' + esc(s.name.replace(/\s*\(.*\)/, '')) + '</span>' +
-        '<span class="ctn-qty">' + item.qty + '</span>' +
+      var selHtml = _ctnTypeOpts.replace('value="' + s.id + '"', 'value="' + s.id + '" selected');
+      html += '<div class="ctn-row">' +
+        '<select data-idx="' + idx + '" data-field="type">' + selHtml + '</select>' +
+        '<input type="number" min="1" max="50" value="' + item.qty + '" data-idx="' + idx + '" data-field="qty">' +
         '<span class="ctn-vol">' + vol + ' cbm/柜</span>' +
         '<button type="button" class="btn-rm" data-idx="' + idx + '" title="移除">×</button></div>';
     });
     el.innerHTML = html;
+    // 行内事件
+    el.querySelectorAll('select[data-field=type]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        var idx = +this.dataset.idx;
+        S.ctnSpecs[idx].spec = ContainerLib.byId(this.value);
+        renderCtnList(); updCtnVolLab(); save();
+      });
+    });
+    el.querySelectorAll('input[data-field=qty]').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var idx = +this.dataset.idx;
+        S.ctnSpecs[idx].qty = Math.max(1, Math.min(50, +this.value || 1));
+        updCtnVolLab(); save();
+      });
+      inp.addEventListener('change', function () { updCtnVolLab(); save(); });
+    });
     el.querySelectorAll('.btn-rm').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var idx = +this.dataset.idx;
-        S.ctnSpecs.splice(idx, 1);
+        S.ctnSpecs.splice(+this.dataset.idx, 1);
         renderCtnList(); updCtnVolLab(); save();
       });
     });
@@ -133,7 +130,6 @@
       total += ContainerLib.volumeCbm(S.ctnSpecs[i].spec) * S.ctnSpecs[i].qty;
     }
     $('ctnVolLab').textContent = '总容积 ' + fmt(total, 1) + ' cbm';
-    // 同步主规格为第一个柜型（兼容旧代码路径）
     S.spec = S.ctnSpecs.length ? S.ctnSpecs[0].spec : ContainerLib.byId('40HQ');
   }
 
