@@ -111,8 +111,9 @@
       var s = item.spec;
       var vol = fmt(ContainerLib.volumeCbm(s), 1);
       html += '<div class="ctn-list-item">' +
-        '<span class="ctn-name">' + esc(s.name) + ' ×<b>' + item.qty + '</b></span>' +
-        '<span class="ctn-vol">' + vol + 'cbm/柜</span>' +
+        '<span class="ctn-name">' + esc(s.name.replace(/\s*\(.*\)/, '')) + '</span>' +
+        '<span class="ctn-qty">' + item.qty + '</span>' +
+        '<span class="ctn-vol">' + vol + ' cbm/柜</span>' +
         '<button type="button" class="btn-rm" data-idx="' + idx + '" title="移除">×</button></div>';
     });
     el.innerHTML = html;
