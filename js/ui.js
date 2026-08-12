@@ -807,8 +807,56 @@
       updateToggleState();
     });
 
+    // 首次引导气泡：指向「导入箱单」按钮，仅用户首次访问时出现
+    initCoachTip();
+
     // 首次自动计算
     setTimeout(calc, 260);
+  }
+
+  function initCoachTip() {
+    try {
+      if (localStorage.getItem('coach_done') === '1') return;
+    } catch (e) { /* localStorage 不可用时直接展示一次 */ }
+
+    var btn = $('btnImportTpl');
+    if (!btn) return;
+
+    var tip = document.createElement('div');
+    tip.className = 'coach-tip';
+    tip.innerHTML =
+      '<span class="coach-arrow"></span>' +
+      '<div class="coach-body"><span>在此导入箱单</span>' +
+      '<button type="button" class="coach-close">知道了</button></div>';
+    document.body.appendChild(tip);
+
+    function place() {
+      var r = btn.getBoundingClientRect();
+      if (r.width === 0) { tip.style.display = 'none'; return; }
+      tip.style.display = '';
+      // 箭头位于气泡内部 left:26px、宽 14px，故箭头尖端在气泡局部 x≈33 处；
+      // 令其指向按钮水平中心
+      var left = r.left + r.width / 2 - 33;
+      var top = r.bottom + 12;
+      // 防止超出左右边界
+      var maxLeft = window.innerWidth - tip.offsetWidth - 8;
+      if (left > maxLeft) left = Math.max(8, maxLeft);
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    }
+
+    // 等布局稳定后再定位，并监听窗口变化
+    requestAnimationFrame(place);
+    setTimeout(place, 300);
+    window.addEventListener('resize', function () { if (tip.parentNode) place(); });
+
+    function dismiss() {
+      try { localStorage.setItem('coach_done', '1'); } catch (e) {}
+      if (tip.parentNode) tip.parentNode.removeChild(tip);
+    }
+    tip.querySelector('.coach-close').addEventListener('click', dismiss);
+    // 点击气泡本体（非关闭按钮）也隐藏本次提示，但不写标记，下次仍提示
+    tip.addEventListener('click', function (e) { if (e.target === tip || e.target.tagName === 'SPAN') dismiss(); });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
