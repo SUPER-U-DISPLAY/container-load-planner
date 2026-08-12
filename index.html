@@ -55,19 +55,30 @@
       <div class="card" id="cardSpec">
         <h3><span class="ico">▦</span>选择集装箱<span class="right" id="ctnVolLab"></span></h3>
         <div class="body">
-          <div class="field" style="margin-bottom:10px">
-            <label>柜型</label>
-            <select id="selContainer"></select>
+
+          <!-- A. 系统推荐 -->
+          <div class="spec-section" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+            <label style="font-weight:600;font-size:12px;color:var(--text-2);margin-bottom:6px;display:block">🤖 系统推荐</label>
+            <button class="btn primary sm" id="btnRecommend" style="width:100%">一键推荐最优柜型</button>
+            <div id="recommendResult" class="hint" style="margin-top:6px;font-size:11px;display:none"></div>
           </div>
-          <div class="grid4" id="ctnDims">
-            <div class="field"><label>内长 mm</label><input type="number" id="inCtnL"></div>
-            <div class="field"><label>内宽 mm</label><input type="number" id="inCtnW"></div>
-            <div class="field"><label>内高 mm</label><input type="number" id="inCtnH"></div>
-            <div class="field"><label>限重 kg</label><input type="number" id="inCtnMax"></div>
+
+          <!-- B. 手动选择柜型与数量 -->
+          <div class="spec-section">
+            <label style="font-weight:600;font-size:12px;color:var(--text-2);margin-bottom:6px;display:block">📋 手动选择柜型与数量</label>
+            <div class="row" style="gap:6px;margin-bottom:8px">
+              <select id="selContainer" style="flex:2"></select>
+              <input type="number" id="inCtnQty" min="1" max="50" value="1" placeholder="数量" style="flex:.8;text-align:center">
+              <button class="btn sm" id="btnAddCtn" title="添加到柜型列表">＋</button>
+            </div>
+            <!-- 已选柜型列表 -->
+            <div id="ctnList" class="ctn-list">
+              <span class="hint" style="font-size:11px">尚未添加柜型，请从上方选择并添加</span>
+            </div>
           </div>
-          <div class="row action-row">
-            <button class="btn primary sm" id="btnRecommend" style="flex:1">⚙ 柜型推荐</button>
-            <label class="check" style="flex:1.4"><input type="checkbox" id="ckMulti" checked>装不下自动加柜</label>
+
+          <div class="row action-row" style="margin-top:10px">
+            <label class="check" style="flex:1"><input type="checkbox" id="ckMulti" checked>装不下自动加柜</label>
           </div>
         </div>
       </div>
@@ -271,10 +282,10 @@
 <input type="file" id="fileXlsx" accept=".xlsx,.xls,.csv" style="display:none">
 <input type="file" id="fileJson" accept=".json" style="display:none">
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/xlsx.full.min.js"></script>
+<script src="js/vendor/jspdf.umd.min.js"></script>
 <script src="js/containers.js"></script>
 <script src="js/packer.js"></script>
 <script src="js/importer.js"></script>

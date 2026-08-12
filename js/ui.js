@@ -61,42 +61,79 @@
   }
 
   /* ================= 集装箱 ================= */
+  /* S.ctnSpecs = [{ spec: ContainerPreset, qty: number }, ...]  手动选型列表 */
   function initContainerSelect() {
     var sel = $('selContainer');
-    var html = ContainerLib.PRESETS.map(function (p) {
-      return '<option value="' + p.id + '">' + p.name + '　' + p.L + '×' + p.W + '×' + p.H + 'mm　' + p.maxWeight + 'kg</option>';
+    var html = ContainerLib.PRESETS.filter(function (p) { return p.id !== 'LCL'; }).map(function (p) {
+      return '<option value="' + p.id + '">' + p.name + '</option>';
     }).join('');
-    html += '<option value="__custom">自定义尺寸…</option>';
     sel.innerHTML = html;
     sel.value = '40HQ';
-    applySpecFromSelect();
-    sel.addEventListener('change', applySpecFromSelect);
-    ['inCtnL', 'inCtnW', 'inCtnH', 'inCtnMax'].forEach(function (id) {
-      $(id).addEventListener('input', function () {
-        S.spec = {
-          id: 'CUSTOM', name: '自定义柜型',
-          L: +$('inCtnL').value || 1, W: +$('inCtnW').value || 1,
-          H: +$('inCtnH').value || 1, maxWeight: +$('inCtnMax').value || 1
-        };
-        $('selContainer').value = '__custom';
-        updCtnVolLab();
-        save();
+
+    // 默认预填一个 40HQ
+    if (!S.ctnSpecs || !S.ctnSpecs.length) {
+      S.ctnSpecs = [{ spec: ContainerLib.byId('40HQ'), qty: 1 }];
+    }
+    renderCtnList();
+    updCtnVolLab();
+
+    // 添加按钮
+    $('btnAddCtn').addEventListener('click', addCtnFromSelect);
+  }
+
+  /** 从下拉框+数量添加一个柜型到列表 */
+  function addCtnFromSelect() {
+    var typeId = $('selContainer').value;
+    var qty = Math.max(1, Math.min(50, +$('inCtnQty').value || 1));
+    var spec = ContainerLib.byId(typeId);
+    if (!spec) return;
+    // 如果已有同类型则合并数量
+    var found = false;
+    for (var i = 0; i < S.ctnSpecs.length; i++) {
+      if (S.ctnSpecs[i].spec.id === typeId) {
+        S.ctnSpecs[i].qty += qty; found = true; break;
+      }
+    }
+    if (!found) S.ctnSpecs.push({ spec: spec, qty: qty });
+    renderCtnList(); updCtnVolLab(); save();
+    toast('已添加 ' + spec.name + ' ×' + qty, 'ok');
+  }
+
+  /** 渲染手动选型列表 */
+  function renderCtnList() {
+    var el = $('ctnList');
+    if (!S.ctnSpecs.length) {
+      el.innerHTML = '<span class="hint" style="font-size:11px">尚未添加柜型，请从上方选择并添加</span>';
+      return;
+    }
+    var html = '';
+    S.ctnSpecs.forEach(function (item, idx) {
+      var s = item.spec;
+      var vol = fmt(ContainerLib.volumeCbm(s), 1);
+      html += '<div class="ctn-list-item">' +
+        '<span class="ctn-name">' + esc(s.name) + ' ×<b>' + item.qty + '</b></span>' +
+        '<span class="ctn-vol">' + vol + 'cbm/柜</span>' +
+        '<button type="button" class="btn-rm" data-idx="' + idx + '" title="移除">×</button></div>';
+    });
+    el.innerHTML = html;
+    el.querySelectorAll('.btn-rm').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = +this.dataset.idx;
+        S.ctnSpecs.splice(idx, 1);
+        renderCtnList(); updCtnVolLab(); save();
       });
     });
   }
-  function applySpecFromSelect() {
-    var v = $('selContainer').value;
-    if (v === '__custom') {
-      S.spec = { id: 'CUSTOM', name: '自定义柜型', L: +$('inCtnL').value || 12000, W: +$('inCtnW').value || 2350, H: +$('inCtnH').value || 2690, maxWeight: +$('inCtnMax').value || 26000 };
-    } else {
-      S.spec = ContainerLib.byId(v);
-    }
-    $('inCtnL').value = S.spec.L; $('inCtnW').value = S.spec.W;
-    $('inCtnH').value = S.spec.H; $('inCtnMax').value = S.spec.maxWeight;
-    updCtnVolLab(); save();
-  }
+
+  /** 更新容积标签（总容积） */
   function updCtnVolLab() {
-    $('ctnVolLab').textContent = '容积 ' + fmt(ContainerLib.volumeCbm(S.spec), 2) + ' cbm';
+    var total = 0;
+    for (var i = 0; i < S.ctnSpecs.length; i++) {
+      total += ContainerLib.volumeCbm(S.ctnSpecs[i].spec) * S.ctnSpecs[i].qty;
+    }
+    $('ctnVolLab').textContent = '总容积 ' + fmt(total, 1) + ' cbm';
+    // 同步主规格为第一个柜型（兼容旧代码路径）
+    S.spec = S.ctnSpecs.length ? S.ctnSpecs[0].spec : ContainerLib.byId('40HQ');
   }
 
   /* ================= 货物表 ================= */
@@ -202,6 +239,7 @@
   function calc() {
     var usable = S.cargos.filter(function (c) { return c.l > 0 && c.w > 0 && c.h > 0 && c.qty > 0; });
     if (!usable.length) { toast('没有可用货物，请先录入或导入数据', 'err'); return; }
+    if (!S.ctnSpecs || !S.ctnSpecs.length) { toast('请先添加柜型', 'err'); return; }
     var skipped = S.cargos.length - usable.length;
 
     loading(true, '正在求解装柜方案…');
@@ -211,9 +249,10 @@
           supportRatio: (+$('rgSupport').value || 75) / 100,
           maxContainers: +$('inMaxCtn').value || 20,
           multiContainer: $('ckMulti').checked,
-          sameKindFirst: $('ckSameKind') ? $('ckSameKind').checked : false
+          sameKindFirst: $('ckSameKind') ? $('ckSameKind').checked : false,
+          preferredSpecs: S.ctnSpecs   // 用户手动选定的柜型列表 [{spec, qty}, ...]
         };
-        S._lastOpt = opt;  // 供逐柜换型时复用参数
+        S._lastOpt = opt;
         var t0 = performance.now();
         S.result = Packer.pack(usable, S.spec, opt);
         var ms = Math.round(performance.now() - t0);
@@ -259,92 +298,14 @@
   function renderTabs() {
     var r = S.result, html = '';
     if (!r.containers.length) { $('ctnTabs').innerHTML = '<span class="hint">无可装柜</span>'; return; }
-    // 构建柜型选项HTML（所有非LCL预设）
-    var typeOpts = ContainerLib.PRESETS.filter(function (p) { return p.id !== 'LCL'; }).map(function (p) {
-      return '<option value="' + p.id + '">' + p.id + '</option>';
-    }).join('');
     r.containers.forEach(function (ct, i) {
-      var active = (i === S.cur ? ' active' : '');
-      var selVal = ct.spec.id || '';
-      html += '<div class="ctn-tab' + active + '" data-i="' + i + '">第' + ct.index + '柜 · ' +
-        ct.stats.count + '箱 · ' + pct(ct.stats.volumeRate) +
-        ' <select class="ctn-type-sel" data-ctn-i="' + i + '" title="切换此柜的柜型">' + typeOpts.replace('value="' + selVal + '"', 'value="' + selVal + '" selected') + '</select></div>';
+      html += '<div class="ctn-tab' + (i === S.cur ? ' active' : '') + '" data-i="' + i + '">第' + ct.index + '柜 · ' +
+        ct.spec.id + ' · ' + ct.stats.count + '箱 · ' + pct(ct.stats.volumeRate) + '</div>';
     });
     $('ctnTabs').innerHTML = html;
-    // tab 切换
     $('ctnTabs').querySelectorAll('.ctn-tab').forEach(function (t) {
-      t.addEventListener('click', function (e) {
-        // 如果点的是下拉框本身，不触发tab切换
-        if (e.target.classList.contains('ctn-type-sel')) return;
-        S.cur = +t.dataset.i; renderTabs(); showContainer(S.cur);
-      });
+      t.addEventListener('click', function () { S.cur = +t.dataset.i; renderTabs(); showContainer(S.cur); });
     });
-    // 柜型切换
-    $('ctnTabs').querySelectorAll('.ctn-type-sel').forEach(function (sel) {
-      sel.addEventListener('change', function () {
-        var ctnIdx = +this.dataset.ctnI;
-        changeContainerType(ctnIdx, this.value);
-      });
-    });
-  }
-
-  /* ===== 逐柜手动换型 ===== */
-  function changeContainerType(ctnIdx, newTypeId) {
-    var r = S.result;
-    if (!r || !r.containers[ctnIdx]) return;
-    var ct = r.containers[ctnIdx];
-    var newSpec = ContainerLib.byId(newTypeId);
-    if (!newSpec) { toast('未知柜型：' + newTypeId, 'err'); return; }
-    // 快速检查所有货物能否放入新柜型
-    var canFit = true;
-    for (var i = 0; i < ct.items.length; i++) {
-      var it = ct.items[i];
-      var ors = Packer.orientations(it.l, it.w, it.h, it.rotateMode);
-      var ok = false;
-      for (var o = 0; o < ors.length; o++) {
-        if (ors[o][0] <= newSpec.L + 1e-6 && ors[o][1] <= newSpec.W + 1e-6 && ors[o][2] <= newSpec.H + 1e-6) { ok = true; break; }
-      }
-      if (!ok) { canFit = false; break; }
-    }
-    if (!canFit) {
-      toast('⚠ ' + newSpec.name + ' 装不下此柜货物，尺寸超限', 'warn');
-      // 恢复原值
-      renderTabs();
-      return;
-    }
-    // 用新规格重装此柜货物
-    var dr = Packer.packSingle(newSpec, ct.items.slice(), {
-      supportRatio: S._lastOpt ? S._lastOpt.supportRatio : 0.75,
-      sameKindFirst: S._lastOpt ? S._lastOpt.sameKindFirst : false
-    });
-    if (!dr || dr.placed.length !== ct.items.length) {
-      toast('⚠ ' + newSpec.name + ' 无法全部装入（仅装入 ' + (dr ? dr.placed.length : 0) + '/' + ct.items.length + ' 箱）', 'warn');
-      renderTabs();
-      return;
-    }
-    // 替换
-    r.containers[ctnIdx] = { index: ct.index, spec: newSpec, items: dr.placed, stats: dr.stats, strategy: dr.strategy + ' [手动换型]' };
-    // 重算汇总
-    recalcSummary(r);
-    renderResult();
-    if (ctnIdx === S.cur) showContainer(S.cur);
-    toast('第' + (ctnIdx + 1) + '柜已切换为 ' + newSpec.name, 'ok');
-  }
-
-  /* ===== 重算汇总（逐柜换型后） ===== */
-  function recalcSummary(r) {
-    var sumCount = 0, sumVol = 0, sumWt = 0, totalCap = 0;
-    for (var c = 0; c < r.containers.length; c++) {
-      var ct = r.containers[c];
-      sumCount += ct.stats.count;
-      sumVol += ct.stats.volumeUsedCbm;
-      sumWt += ct.stats.weight;
-      totalCap += ct.spec.L * ct.spec.W * ct.spec.H / 1e9;
-    }
-    r.summary.packedUnits = sumCount;
-    r.summary.totalVolumeCbm = sumVol;
-    r.summary.totalWeight = sumWt;
-    r.summary.avgVolumeRate = totalCap > 0 ? sumVol / totalCap : 0;
   }
 
   function showContainer(i) {
@@ -613,7 +574,7 @@
   /* ================= 工程存读 ================= */
   function save() {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ title: S.title, cargos: S.cargos, spec: S.spec }));
+      localStorage.setItem(LS_KEY, JSON.stringify({ title: S.title, cargos: S.cargos, spec: S.spec, ctnSpecs: S.ctnSpecs }));
     } catch (e) { /* ignore */ }
   }
   function restore() {
@@ -621,13 +582,16 @@
       var d = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
       if (d && d.cargos && d.cargos.length) {
         S.cargos = d.cargos; S.title = d.title || S.title;
-        if (d.spec) {
-          S.spec = d.spec;
-          $('selContainer').value = ContainerLib.byId(d.spec.id) ? d.spec.id : '__custom';
-          $('inCtnL').value = d.spec.L; $('inCtnW').value = d.spec.W;
-          $('inCtnH').value = d.spec.H; $('inCtnMax').value = d.spec.maxWeight;
-          updCtnVolLab();
+        // 新格式优先
+        if (d.ctnSpecs && d.ctnSpecs.length) {
+          S.ctnSpecs = d.ctnSpecs;
+        } else if (d.spec) {
+          // 兼容旧格式：单 spec → 转为 ctnSpecs
+          var oldSpec = typeof d.spec === 'object' ? d.spec : ContainerLib.byId(d.spec.id || '40HQ') || ContainerLib.byId('40HQ');
+          S.ctnSpecs = [{ spec: oldSpec, qty: 1 }];
+          S.spec = oldSpec;
         }
+        renderCtnList(); updCtnVolLab();
         return true;
       }
     } catch (e) { }
@@ -642,24 +606,35 @@
     setTimeout(function () {
       var list = Packer.recommend(usable, ContainerLib.PRESETS);
       loading(false);
-      var html = '<table class="cargo-table"><thead><tr><th>柜型</th><th class="num">所需柜数</th><th class="num">平均利用率</th><th class="num">未装入</th><th></th></tr></thead><tbody>';
-      list.forEach(function (r, i) {
-        html += '<tr><td>' + esc(r.name) + (i === 0 ? ' <span class="tag ok">推荐</span>' : '') + '</td>' +
-          '<td class="num"><b>' + r.containers + '</b></td>' +
-          '<td class="num">' + pct(r.rate) + '</td>' +
-          '<td class="num ' + (r.unpacked ? 'danger' : '') + '">' + r.unpacked + '</td>' +
-          '<td><button class="btn xs" data-id="' + r.id + '">选用</button></td></tr>';
+      if (!list.length) { toast('无可用柜型', 'err'); return; }
+
+      // 取最优方案，自动填充到手动选型列表
+      var best = list[0];
+      S.ctnSpecs = [{ spec: ContainerLib.byId(best.id), qty: best.containers }];
+      renderCtnList(); updCtnVolLab(); save();
+
+      // 显示推荐结果
+      var resEl = $('recommendResult');
+      resEl.style.display = '';
+      resEl.innerHTML =
+        '✅ 推荐 <b>' + esc(best.name) + '</b> × <b>' + best.containers + '</b> 柜，' +
+        '平均利用率 <b>' + pct(best.rate) + '</b>' +
+        (best.unpacked ? '，<span class="danger">未装入 ' + best.unpacked + ' 箱</span>' : '') +
+        '<br><span style="color:var(--text-3)">已自动添加到下方列表，可手动调整数量或增减柜型。</span>';
+
+      // 同时展示完整对比表（可选查看）
+      var detailHtml = '<div style="margin-top:6px"><table style="width:100%;font-size:11px;border-collapse:collapse">' +
+        '<tr style="background:var(--bg)"><th style="padding:3px 4px;text-align:left">柜型</th><th style="padding:3px 4px;text-align:right">柜数</th><th style="padding:3px 4px;text-align:right">利用率</th></tr>';
+      list.slice(0, 5).forEach(function (r, i) {
+        detailHtml += '<tr' + (i === 0 ? ' style="background:#eef3ff;font-weight:600"' : '') + '>' +
+          '<td style="padding:2px 4px">' + r.name.replace(/\s.*$/, '') + (i === 0 ? ' ⭐' : '') + '</td>' +
+          '<td style="padding:2px 4px;text-align:right">' + r.containers + '</td>' +
+          '<td style="padding:2px 4px;text-align:right;color:' + (r.rate > .7 ? '#16a34a' : r.rate > .5 ? '#d97706' : '#dc2626') + '">' + pct(r.rate) + '</td></tr>';
       });
-      html += '</tbody></table><div class="hint" style="margin-top:8px">排序依据：未装入件数 → 所需柜数 → 平均体积利用率。仅作参考，实际还需考虑运费与柜型可得性。</div>';
-      var m = modal('柜型推荐', html, [{ t: '关闭' }]);
-      m.el.querySelectorAll('button[data-id]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          $('selContainer').value = b.dataset.id;
-          applySpecFromSelect();
-          m.close();
-          calc();
-        });
-      });
+      detailHtml += '</table></div>';
+      resEl.innerHTML += detailHtml;
+
+      toast('已推荐 ' + best.name + ' ×' + best.containers + '，点击「开始排柜」计算', 'ok');
     }, 30);
   }
 
@@ -781,7 +756,13 @@
           var d = JSON.parse(fr.result);
           if (!d.cargos) throw new Error('文件格式不正确');
           S.cargos = d.cargos; S.title = d.title || S.title;
-          if (d.spec) { S.spec = d.spec; $('selContainer').value = ContainerLib.byId(d.spec.id) ? d.spec.id : '__custom'; $('inCtnL').value = d.spec.L; $('inCtnW').value = d.spec.W; $('inCtnH').value = d.spec.H; $('inCtnMax').value = d.spec.maxWeight; updCtnVolLab(); }
+          if (d.ctnSpecs && d.ctnSpecs.length) {
+            S.ctnSpecs = d.ctnSpecs;
+          } else if (d.spec) {
+            var jsSpec = typeof d.spec === 'object' ? d.spec : ContainerLib.byId(d.spec.id || '40HQ') || ContainerLib.byId('40HQ');
+            S.ctnSpecs = [{ spec: jsSpec, qty: 1 }]; S.spec = jsSpec;
+          }
+          renderCtnList(); updCtnVolLab();
           renderCargoTable(); save(); toast('工程已载入', 'ok'); calc();
         } catch (err) { toast('读取失败：' + err.message, 'err'); }
       };

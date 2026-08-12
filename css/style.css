@@ -433,19 +433,24 @@ input[type=range] { accent-color: var(--brand); cursor: pointer; width: 100%; }
 .ctn-tab:hover { border-color: var(--brand); color: var(--brand); }
 .ctn-tab.active { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(37,99,235,.3); }
 
-/* 逐柜独立选型下拉框 */
-.ctn-tab { display: inline-flex; align-items: center; gap: 4px; }
-.ctn-tab .ctn-type-sel {
-  font-size: 10px; height: 18px; line-height: 1;
-  padding: 0 2px; border: 1px solid var(--border);
-  border-radius: 4px; background: var(--bg); color: var(--text-2);
-  cursor: pointer; opacity: .75; transition: opacity .14s;
+/* 手动选型列表 */
+.ctn-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
+.ctn-list-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; border-radius: 6px;
+  background: var(--bg); font-size: 11.5px; line-height: 1.4;
+  border: 1px solid var(--border); transition: .12s;
 }
-.ctn-tab .ctn-type-sel:hover,
-.ctn-tab.active .ctn-type-sel {
-  opacity: 1; border-color: var(--brand); color: var(--brand);
+.ctn-list-item:hover { border-color: var(--brand); }
+.ctn-list-item .ctn-name { flex: 1; font-weight: 500; }
+.ctn-list-item .ctn-vol { color: var(--text-3); font-size: 10px; }
+.ctn-list-item .btn-rm {
+  width: 18px; height: 18px; border-radius: 50%; border: none;
+  background: #fee2e2; color: #dc2626; font-size: 13px;
+  cursor: pointer; line-height: 1; display: inline-flex;
+  align-items: center; justify-content: center; flex-shrink: 0;
 }
-.ctn-tab.active .ctn-type-sel { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.4); }
+.ctn-list-item .btn-rm:hover { background: #dc2626; color: #fff; }
 
 /* 首次引导气泡（指向「导入箱单」） */
 .coach-tip {

@@ -456,15 +456,42 @@
       else feasible.push(u);
     }
 
+    /* ===== 构建柜型队列（支持用户手动选型顺序） ===== */
+    var specQueue = [];  // { spec, maxQty }
+    if (opt.preferredSpecs && opt.preferredSpecs.length) {
+      for (var pi = 0; pi < opt.preferredSpecs.length; pi++) {
+        var entry = opt.preferredSpecs[pi];
+        specQueue.push({ spec: entry.spec, maxQty: entry.qty || 99, usedQty: 0 });
+      }
+    } else {
+      specQueue.push({ spec: spec, maxQty: 99, usedQty: 0 });
+    }
+
     var results = [], remain = feasible, guard = 0;
+    var qIdx = 0;  // 当前使用队列中第几个柜型
+
+    function nextSpec() {
+      while (qIdx < specQueue.length) {
+        var sq = specQueue[qIdx];
+        if (sq.usedQty < sq.maxQty) return sq.spec;
+        qIdx++;
+      }
+      // 队列用完但还有货：回退到最后一个柜型继续（auto-add 模式）
+      if (specQueue.length) return specQueue[specQueue.length - 1].spec;
+      return spec;
+    }
+
     while (remain.length > 0 && guard < opt.maxContainers) {
       guard++;
-      var r = packOne(spec, remain, opt);
+      var curSpec = nextSpec();
+      var r = packOne(curSpec, remain, opt);
       if (!r || r.placed.length === 0) {
         for (var q = 0; q < remain.length; q++) remain[q]._reason = remain[q]._reason || '无可行摆放位置';
         break;
       }
-      results.push({ index: results.length + 1, spec: spec, items: r.placed, stats: r.stats, strategy: r.strategy });
+      results.push({ index: results.length + 1, spec: curSpec, items: r.placed, stats: r.stats, strategy: r.strategy });
+      // 标记该柜型已用一柜
+      if (qIdx < specQueue.length) specQueue[qIdx].usedQty++;
       remain = r.left;
       if (!opt.multiContainer) break;
     }
@@ -476,8 +503,7 @@
     if (opt.autoDowngrade && results.length >= 2) {
       var last = results[results.length - 1];
       if (last.stats.volumeRate < opt.downgradeThreshold && last.items.length > 0) {
-        // 构建降级候选列表（比当前柜体积小的）
-        var curVol = spec.L * spec.W * spec.H;
+        var curVol = last.spec.L * last.spec.W * last.spec.H;
         var cands = [];
         for (var di = 0; di < ContainerLib.PRESETS.length; di++) {
           var ps = ContainerLib.PRESETS[di];
@@ -485,11 +511,9 @@
           var pv = ps.L * ps.W * ps.H;
           if (pv < curVol - EPS) cands.push(ps);
         }
-        // 按体积从大到小排序（优先试最接近的大柜）
         cands.sort(function (a, b) { return (b.L * b.W * b.H) - (a.L * a.W * a.H); });
         for (var ci = 0; ci < cands.length; ci++) {
           var ds = cands[ci];
-          // 快速检查：尾柜所有货物能否放入小柜
           var canFit = true;
           for (var fi = 0; fi < last.items.length; fi++) {
             var it = last.items[fi];
@@ -501,25 +525,23 @@
             if (!fits) { canFit = false; break; }
           }
           if (!canFit) continue;
-          // 用小柜重装这批货
           var dr = packOne(ds, last.items.slice(), opt);
           if (dr && dr.placed.length === last.items.length) {
-            // 全部装入，替换
             results[results.length - 1] = { index: last.index, spec: ds, items: dr.placed, stats: dr.stats, strategy: dr.strategy + ' [自动降级]' };
-            break; // 降级成功，停止尝试更小的
+            break;
           }
         }
       }
     }
 
     var unpacked = oversize.concat(remain);
-    var sumCount = 0, sumVol = 0, sumWt = 0;
+    var sumCount = 0, sumVol = 0, sumWt = 0, totalCap = 0;
     for (var c = 0; c < results.length; c++) {
       sumCount += results[c].stats.count;
       sumVol += results[c].stats.volumeUsedCbm;
       sumWt += results[c].stats.weight;
+      totalCap += results[c].spec.L * results[c].spec.W * results[c].spec.H / 1e9;
     }
-    var capOne = spec.L * spec.W * spec.H / 1e9;
     return {
       containers: results,
       unpacked: unpacked,
@@ -530,7 +552,7 @@
         containerCount: results.length,
         totalVolumeCbm: sumVol,
         totalWeight: sumWt,
-        avgVolumeRate: results.length ? sumVol / (results.length * capOne) : 0
+        avgVolumeRate: totalCap > 0 ? sumVol / totalCap : 0
       }
     };
   }
