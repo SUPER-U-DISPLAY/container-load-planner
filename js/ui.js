@@ -213,6 +213,7 @@
           multiContainer: $('ckMulti').checked,
           sameKindFirst: $('ckSameKind') ? $('ckSameKind').checked : false
         };
+        S._lastOpt = opt;  // 供逐柜换型时复用参数
         var t0 = performance.now();
         S.result = Packer.pack(usable, S.spec, opt);
         var ms = Math.round(performance.now() - t0);
@@ -258,14 +259,92 @@
   function renderTabs() {
     var r = S.result, html = '';
     if (!r.containers.length) { $('ctnTabs').innerHTML = '<span class="hint">无可装柜</span>'; return; }
+    // 构建柜型选项HTML（所有非LCL预设）
+    var typeOpts = ContainerLib.PRESETS.filter(function (p) { return p.id !== 'LCL'; }).map(function (p) {
+      return '<option value="' + p.id + '">' + p.id + '</option>';
+    }).join('');
     r.containers.forEach(function (ct, i) {
-      html += '<div class="ctn-tab' + (i === S.cur ? ' active' : '') + '" data-i="' + i + '">第' + ct.index + '柜 · ' +
-        ct.stats.count + '箱 · ' + pct(ct.stats.volumeRate) + '</div>';
+      var active = (i === S.cur ? ' active' : '');
+      var selVal = ct.spec.id || '';
+      html += '<div class="ctn-tab' + active + '" data-i="' + i + '">第' + ct.index + '柜 · ' +
+        ct.stats.count + '箱 · ' + pct(ct.stats.volumeRate) +
+        ' <select class="ctn-type-sel" data-ctn-i="' + i + '" title="切换此柜的柜型">' + typeOpts.replace('value="' + selVal + '"', 'value="' + selVal + '" selected') + '</select></div>';
     });
     $('ctnTabs').innerHTML = html;
+    // tab 切换
     $('ctnTabs').querySelectorAll('.ctn-tab').forEach(function (t) {
-      t.addEventListener('click', function () { S.cur = +t.dataset.i; renderTabs(); showContainer(S.cur); });
+      t.addEventListener('click', function (e) {
+        // 如果点的是下拉框本身，不触发tab切换
+        if (e.target.classList.contains('ctn-type-sel')) return;
+        S.cur = +t.dataset.i; renderTabs(); showContainer(S.cur);
+      });
     });
+    // 柜型切换
+    $('ctnTabs').querySelectorAll('.ctn-type-sel').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        var ctnIdx = +this.dataset.ctnI;
+        changeContainerType(ctnIdx, this.value);
+      });
+    });
+  }
+
+  /* ===== 逐柜手动换型 ===== */
+  function changeContainerType(ctnIdx, newTypeId) {
+    var r = S.result;
+    if (!r || !r.containers[ctnIdx]) return;
+    var ct = r.containers[ctnIdx];
+    var newSpec = ContainerLib.byId(newTypeId);
+    if (!newSpec) { toast('未知柜型：' + newTypeId, 'err'); return; }
+    // 快速检查所有货物能否放入新柜型
+    var canFit = true;
+    for (var i = 0; i < ct.items.length; i++) {
+      var it = ct.items[i];
+      var ors = Packer.orientations(it.l, it.w, it.h, it.rotateMode);
+      var ok = false;
+      for (var o = 0; o < ors.length; o++) {
+        if (ors[o][0] <= newSpec.L + 1e-6 && ors[o][1] <= newSpec.W + 1e-6 && ors[o][2] <= newSpec.H + 1e-6) { ok = true; break; }
+      }
+      if (!ok) { canFit = false; break; }
+    }
+    if (!canFit) {
+      toast('⚠ ' + newSpec.name + ' 装不下此柜货物，尺寸超限', 'warn');
+      // 恢复原值
+      renderTabs();
+      return;
+    }
+    // 用新规格重装此柜货物
+    var dr = Packer.packSingle(newSpec, ct.items.slice(), {
+      supportRatio: S._lastOpt ? S._lastOpt.supportRatio : 0.75,
+      sameKindFirst: S._lastOpt ? S._lastOpt.sameKindFirst : false
+    });
+    if (!dr || dr.placed.length !== ct.items.length) {
+      toast('⚠ ' + newSpec.name + ' 无法全部装入（仅装入 ' + (dr ? dr.placed.length : 0) + '/' + ct.items.length + ' 箱）', 'warn');
+      renderTabs();
+      return;
+    }
+    // 替换
+    r.containers[ctnIdx] = { index: ct.index, spec: newSpec, items: dr.placed, stats: dr.stats, strategy: dr.strategy + ' [手动换型]' };
+    // 重算汇总
+    recalcSummary(r);
+    renderResult();
+    if (ctnIdx === S.cur) showContainer(S.cur);
+    toast('第' + (ctnIdx + 1) + '柜已切换为 ' + newSpec.name, 'ok');
+  }
+
+  /* ===== 重算汇总（逐柜换型后） ===== */
+  function recalcSummary(r) {
+    var sumCount = 0, sumVol = 0, sumWt = 0, totalCap = 0;
+    for (var c = 0; c < r.containers.length; c++) {
+      var ct = r.containers[c];
+      sumCount += ct.stats.count;
+      sumVol += ct.stats.volumeUsedCbm;
+      sumWt += ct.stats.weight;
+      totalCap += ct.spec.L * ct.spec.W * ct.spec.H / 1e9;
+    }
+    r.summary.packedUnits = sumCount;
+    r.summary.totalVolumeCbm = sumVol;
+    r.summary.totalWeight = sumWt;
+    r.summary.avgVolumeRate = totalCap > 0 ? sumVol / totalCap : 0;
   }
 
   function showContainer(i) {

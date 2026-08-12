@@ -433,6 +433,20 @@ input[type=range] { accent-color: var(--brand); cursor: pointer; width: 100%; }
 .ctn-tab:hover { border-color: var(--brand); color: var(--brand); }
 .ctn-tab.active { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(37,99,235,.3); }
 
+/* 逐柜独立选型下拉框 */
+.ctn-tab { display: inline-flex; align-items: center; gap: 4px; }
+.ctn-tab .ctn-type-sel {
+  font-size: 10px; height: 18px; line-height: 1;
+  padding: 0 2px; border: 1px solid var(--border);
+  border-radius: 4px; background: var(--bg); color: var(--text-2);
+  cursor: pointer; opacity: .75; transition: opacity .14s;
+}
+.ctn-tab .ctn-type-sel:hover,
+.ctn-tab.active .ctn-type-sel {
+  opacity: 1; border-color: var(--brand); color: var(--brand);
+}
+.ctn-tab.active .ctn-type-sel { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.4); }
+
 /* 首次引导气泡（指向「导入箱单」） */
 .coach-tip {
   position: fixed; z-index: 9999;

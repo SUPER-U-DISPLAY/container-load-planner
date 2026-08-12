@@ -419,12 +419,25 @@
     return best;
   }
 
+  /* ---------- 单柜重装（供逐柜手动换型调用） ---------- */
+  function packSingle(spec, units, options) {
+    var opt = Object.assign({
+      supportRatio: 0.75
+    }, options || {});
+    return packOne(spec, units, opt);
+  }
+
+  /* ---------- 柜型降级顺序（从大到小） ---------- */
+  var DOWNGRADE_ORDER = ['40HQ', '40GP', '20HQ', '20GP', '45HQ', '53HQ', '20RF', '40RH'];
+
   /* ---------- 主入口 ---------- */
   function pack(cargos, spec, options) {
     var opt = Object.assign({
       supportRatio: 0.75,
       maxContainers: 20,
-      multiContainer: true
+      multiContainer: true,
+      autoDowngrade: true,       // 尾柜利用率过低时自动降级
+      downgradeThreshold: 0.30   // 利用率低于此值触发降级
     }, options || {});
 
     var units = expand(cargos);
@@ -457,6 +470,46 @@
     }
     if (opt.multiContainer && remain.length && guard >= opt.maxContainers) {
       for (var z = 0; z < remain.length; z++) remain[z]._reason = remain[z]._reason || '已达柜数上限';
+    }
+
+    /* ===== 自动降级：尾柜利用率过低时尝试换小柜 ===== */
+    if (opt.autoDowngrade && results.length >= 2) {
+      var last = results[results.length - 1];
+      if (last.stats.volumeRate < opt.downgradeThreshold && last.items.length > 0) {
+        // 构建降级候选列表（比当前柜体积小的）
+        var curVol = spec.L * spec.W * spec.H;
+        var cands = [];
+        for (var di = 0; di < ContainerLib.PRESETS.length; di++) {
+          var ps = ContainerLib.PRESETS[di];
+          if (ps.id === 'LCL') continue;
+          var pv = ps.L * ps.W * ps.H;
+          if (pv < curVol - EPS) cands.push(ps);
+        }
+        // 按体积从大到小排序（优先试最接近的大柜）
+        cands.sort(function (a, b) { return (b.L * b.W * b.H) - (a.L * a.W * a.H); });
+        for (var ci = 0; ci < cands.length; ci++) {
+          var ds = cands[ci];
+          // 快速检查：尾柜所有货物能否放入小柜
+          var canFit = true;
+          for (var fi = 0; fi < last.items.length; fi++) {
+            var it = last.items[fi];
+            var iors = orientations(it.l, it.w, it.h, it.rotateMode);
+            var fits = false;
+            for (var oi = 0; oi < iors.length; oi++) {
+              if (iors[oi][0] <= ds.L + EPS && iors[oi][1] <= ds.W + EPS && iors[oi][2] <= ds.H + EPS) { fits = true; break; }
+            }
+            if (!fits) { canFit = false; break; }
+          }
+          if (!canFit) continue;
+          // 用小柜重装这批货
+          var dr = packOne(ds, last.items.slice(), opt);
+          if (dr && dr.placed.length === last.items.length) {
+            // 全部装入，替换
+            results[results.length - 1] = { index: last.index, spec: ds, items: dr.placed, stats: dr.stats, strategy: dr.strategy + ' [自动降级]' };
+            break; // 降级成功，停止尝试更小的
+          }
+        }
+      }
     }
 
     var unpacked = oversize.concat(remain);
@@ -503,7 +556,7 @@
   }
 
   global.Packer = {
-    pack: pack, recommend: recommend,
+    pack: pack, packSingle: packSingle, recommend: recommend,
     orientations: orientations, statsOf: statsOf,
     STRATEGIES: STRATEGIES
   };
