@@ -9,10 +9,10 @@
     const coords=corners.map(p=>raw(...p)),minx=Math.min(...coords.map(p=>p[0])),maxx=Math.max(...coords.map(p=>p[0])),miny=Math.min(...coords.map(p=>p[1])),maxy=Math.max(...coords.map(p=>p[1]));
     const scale=Math.min((width-pad*2)/(maxx-minx||1),(height-pad*2)/(maxy-miny||1)),ox=(width-(maxx-minx)*scale)/2-minx*scale,oy=(height-(maxy-miny)*scale)/2-miny*scale;
     const pt=(x,y,z)=>{const p=raw(x,y,z);return [p[0]*scale+ox,p[1]*scale+oy];},pstr=ps=>ps.map(p=>pt(...p).map(n=>n.toFixed(2)).join(',')).join(' ');
-    const poly=(ps,fill,stroke='#81998b',extra='')=>`<polygon points="${pstr(ps)}" fill="${fill}" stroke="${stroke}" stroke-width="1.2" ${extra}/>`;
+    const poly=(ps,fill,stroke='#81998b',extra='')=>`<polygon points="${pstr(ps)}" fill="${fill}" stroke="${stroke}" ${extra}/>`;
     const line=(a,b,color='#d9e3d7',dash='')=>`<line x1="${pt(...a)[0]}" y1="${pt(...a)[1]}" x2="${pt(...b)[0]}" y2="${pt(...b)[1]}" stroke="${color}" stroke-width="1" ${dash?`stroke-dasharray="${dash}"`:''}/>`;
     const label=(p,text,opts='')=>`<text x="${pt(...p)[0]}" y="${pt(...p)[1]}" font-family="system-ui,Microsoft YaHei,sans-serif" font-size="13" fill="#819680" text-anchor="middle" ${opts}>${esc(text)}</text>`;
-    let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${container?'排柜':'叠箱'}${view==='top'?'俯视图':view==='side'?'侧视图':'立体示意图'}"><rect width="1000" height="620" fill="#f7f9f4"/>`;
+    let s=`<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="620" viewBox="0 0 ${width} ${height}" role="img" aria-label="${container?'排柜':'叠箱'}${view==='top'?'俯视图':view==='side'?'侧视图':'立体示意图'}"><rect width="1000" height="620" fill="#f7f9f4"/>`;
     s+=view==='side'?poly([[0,0,0],[dim.L,0,0],[dim.L,0,dim.H],[0,0,dim.H]],'#f1f5ee','#ccd9c7'):poly(corners.slice(0,4),'#eff3ea','#ccd9c7');
     const step=Math.max(500,Math.ceil(dim.L/20/500)*500);
     for(let x=step;x<dim.L;x+=step)s+=line([x,0,0],view==='side'?[x,0,dim.H]:[x,dim.W,0]);

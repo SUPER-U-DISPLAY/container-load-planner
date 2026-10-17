@@ -16,6 +16,10 @@ test('二托一：同高底箱联合支撑；不同高会被拒绝',()=>{
  const a=b(cargo('a',600,1000,1000)),d=b(cargo('d',600,1000,1000),{x:600}),top=b(cargo('top',1200,1000,500,{weight:10}),{z:1000});
  assert.equal(C.validate([a,d,top]).ok,true);d.dz=900;d.h=900;assert.equal(C.validate([a,d,top]).ok,false);
 });
+test('装柜明细的顺序确保二托一的两个底箱均先于上箱',()=>{
+ const a=b(cargo('a',600,1000,1000)),d=b(cargo('d',600,1000,1000),{x:600}),top=b(cargo('top',1200,1000,500,{weight:10}),{z:1000});
+ const order=C.loadingOrder([top,d,a]).map(b=>b.uid);assert.deepEqual(order,['a#1','d#1','top#1']);
+});
 test('悬空、重叠、负坐标和非法朝向均被拒绝',()=>{
  assert.equal(has(C.validate([b(cargo('a'),{z:10})]),'floating'),true);
  assert.equal(has(C.validate([b(cargo('a')),b(cargo('b'))]),'collision'),true);

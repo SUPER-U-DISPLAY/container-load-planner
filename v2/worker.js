@@ -1,4 +1,4 @@
-importScripts('core.js');
+importScripts('core.js?v=2.0.1');
 self.onmessage = ({data}) => {
   try {
     if(data.action==='recommend') {

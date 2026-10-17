@@ -1,7 +1,7 @@
 (function(){
   'use strict';
   const C=PlannerCore,D=PlannerDrawing,$=id=>document.getElementById(id),esc=D.esc;
-  const KEY='super-u-prestack-v2',VERSION='2.0.0-beta';
+  const KEY='super-u-prestack-v2',VERSION='2.0.1-beta';
   const labels={cargo:'货物清单',stack:'叠箱工作台',pack:'集装箱排柜',instructions:'装柜指引'};
   const descriptions={cargo:'先整理箱子，再组合叠放，最后排入集装箱。',stack:'按实际装柜习惯自由叠放，保存后作为一个整体排柜。',pack:'组合和散箱一起排入集装箱，保留每个组合的内部结构。',instructions:'核对箱号、组合和装柜次序，导出给生产同事。'};
   const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
@@ -133,7 +133,7 @@
   }
   function startCalculation(action){
     if(worker)worker.terminate();job++;const currentJob=job;
-    try{worker=new Worker('worker.js');}catch(e){return toast('无法启动计算，请使用在线地址或本地 HTTP 服务打开。');}
+    try{worker=new Worker('worker.js?v=2.0.1');}catch(e){return toast('无法启动计算，请使用在线地址或本地 HTTP 服务打开。');}
     setBusy(true);$('calcProgress').classList.remove('hidden');$('progressText').textContent='正在整理组合与箱号…';
     worker.onmessage=({data})=>{if(data.job!==currentJob||job!==currentJob)return;if(data.type==='progress'){$('progressText').textContent=data.progress.message||'已装入 '+data.progress.loaded+' 箱，正在计算第 '+data.progress.step+' 柜';return;}
       worker.terminate();worker=null;setBusy(false);$('calcProgress').classList.add('hidden');if(data.type==='error')return toast(data.message);

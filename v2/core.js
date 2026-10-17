@@ -110,7 +110,7 @@
       return {...b,x:e.W-b.y-b.dy,y:b.x,dx:b.dy,dy:b.dx,orientation};
     });
   }
-  function fingerprint(p){return JSON.stringify({cargos:p.cargos,groups:p.groups,settings:p.settings});}
+  function fingerprint(p){return JSON.stringify({engineVersion:"2.0.1",cargos:p.cargos,groups:p.groups,settings:p.settings});}
   function checkProject(p) {
     if(p.schemaVersion!==2||!Array.isArray(p.cargos)||!Array.isArray(p.groups)||!p.settings)throw Error('请选择 v2 项目文件');
     if(p.cargos.some(c=>!c.id||!c.name||!['none','upright','free'].includes(c.rotateMode)))throw Error('货物字段不完整');
@@ -184,9 +184,20 @@
       if(!best||score>best.score)best={ct,left,score};
     }return best;
   }
+  function loadingOrder(boxes) {
+    const remaining=[...boxes],done=new Set(),ordered=[];
+    const below=new Map(boxes.map(b=>[b.uid,boxes.filter(a=>a.uid!==b.uid&&Math.abs(a.z+a.dz-b.z)<EPS&&intersection(b,a)).map(a=>a.uid)]));
+    const compare=(a,b)=>a.x-b.x||a.z-b.z||a.y-b.y||a.uid.localeCompare(b.uid);
+    while(remaining.length){
+      const ready=remaining.filter(b=>(below.get(b.uid)||[]).every(id=>done.has(id))).sort(compare);
+      const next=ready[0]||remaining.sort(compare)[0];
+      remaining.splice(remaining.indexOf(next),1);done.add(next.uid);ordered.push(next);
+    }
+    return ordered;
+  }
   function summarize(ct,cfg) {
     const v=validate(ct.boxes,cfg,ct.spec,{manual:ct.boxes.some(b=>b.manual)});
-    ct.boxes.sort((a,b)=>a.x-b.x||a.z-b.z||a.y-b.y||a.uid.localeCompare(b.uid)).forEach((b,i)=>b.seq=i+1);
+    ct.boxes=loadingOrder(ct.boxes);ct.boxes.forEach((b,i)=>b.seq=i+1);
     ct.volume=v.volume;ct.utilization=v.volume/(ct.spec.L*ct.spec.W*ct.spec.H/1e9);ct.issues=v.issues;
     ct.unknownWeights=ct.boxes.filter(b=>!known(b.weight)).length;
     ct.cog=ct.weight>0?['x','y','z'].map((a,k)=>ct.boxes.reduce((s,b)=>s+(known(b.weight)?b.weight:0)*(b[a]+[b.dx,b.dy,b.dz][k]/2),0)/ct.weight):null;
@@ -223,6 +234,7 @@
     for(const u of units)if(!seen.has(u.uid))issues.push('丢失箱号 '+u.uid);
     for(const ct of result.containers){
       for(const b of ct.boxes){const u=unitMap.get(b.uid);if(u&&['l','w','h','weight','stackable','maxLayers','topLoad','rotateMode'].some(k=>(u[k]??null)!==(b[k]??null)))issues.push('箱子属性与原始清单不一致：'+b.uid);}
+      for(const b of ct.boxes)if(ct.boxes.some(a=>a.uid!==b.uid&&Math.abs(a.z+a.dz-b.z)<EPS&&intersection(b,a)&&a.seq>=b.seq))issues.push('上箱装入顺序早于支撑箱：'+b.uid);
       const v=validate(ct.boxes,project.settings,ct.spec,{manual:ct.boxes.some(b=>b.manual)});issues.push(...v.issues.filter(i=>i.severity==='error').map(i=>i.message));
     }
     for(const g of project.groups){
@@ -253,6 +265,6 @@
       if(children.length>1){used.add(u.uid);groups.push({id:'auto-'+u.uid,name:'同底面组合 '+(project.groups.length+groups.length+1),allowRotate:true,children});}
     }return groups;
   }
-  const api={EPS,COLORS,SPECS,DEFAULTS,clone,known,poses,expand,box,extent,volume,overlap,unionArea,validate,groupBoxes,normalize,rotateBoxes,fingerprint,checkProject,makeItems,pack,audit,autoGroup,summarize};
+  const api={EPS,COLORS,SPECS,DEFAULTS,clone,known,poses,expand,box,extent,volume,overlap,unionArea,validate,groupBoxes,normalize,rotateBoxes,fingerprint,checkProject,makeItems,pack,audit,autoGroup,loadingOrder,summarize};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PlannerCore=api;
 })(typeof self!=='undefined'?self:globalThis);
