@@ -1,0 +1,223 @@
+(function(){
+  'use strict';
+  const C=PlannerCore,D=PlannerDrawing,$=id=>document.getElementById(id),esc=D.esc;
+  const KEY='super-u-prestack-v2',VERSION='2.0.0-beta';
+  const labels={cargo:'货物清单',stack:'叠箱工作台',pack:'集装箱排柜',instructions:'装柜指引'};
+  const descriptions={cargo:'先整理箱子，再组合叠放，最后排入集装箱。',stack:'按实际装柜习惯自由叠放，保存后作为一个整体排柜。',pack:'组合和散箱一起排入集装箱，保留每个组合的内部结构。',instructions:'核对箱号、组合和装柜次序，导出给生产同事。'};
+  const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
+  const fmt=(n,d=0)=>Number(n||0).toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const pct=n=>(n*100).toFixed(1)+'%';
+  let project,page='cargo',draft={id:null,name:'新组合',allowRotate:true,children:[]},selected=null,reference=null,history=[],stackView='top',packView='iso',currentContainer=0,worker=null,job=0,toastTimer,canvasMeta,drag=null,viewer=null,recommendations=null;
+  const emptyProject=()=>({schemaVersion:2,appVersion:VERSION,name:'新建装柜项目',cargos:[],groups:[],settings:C.clone(C.DEFAULTS),result:null});
+  function demoProject(){
+    const p=emptyProject();p.name='叠箱测试 · 一托二组合';
+    p.cargos=[
+      {id:'base',name:'展示柜底座',ctnNo:'A',l:1200,w:1000,h:1100,qty:6,weight:80,rotateMode:'upright',stackable:true,maxLayers:3,topLoad:200,color:C.COLORS[0],note:'演示数据'},
+      {id:'upper',name:'上层展示模块',ctnNo:'B',l:600,w:1000,h:650,qty:12,weight:18,rotateMode:'upright',stackable:true,maxLayers:2,topLoad:40,color:C.COLORS[1],note:'演示数据'},
+      {id:'flat',name:'饰面板包装箱',ctnNo:'C',l:1200,w:1000,h:200,qty:4,weight:12,rotateMode:'upright',stackable:false,maxLayers:1,topLoad:null,color:C.COLORS[2],note:'演示数据 · 顶部不可承叠'}
+    ];
+    p.groups=[{id:'demo-g1',name:'一托二 · 底座 + 模块',allowRotate:true,children:[{uid:'base#1',x:0,y:0,z:0,orientation:0},{uid:'upper#1',x:0,y:0,z:1100,orientation:0},{uid:'upper#2',x:600,y:0,z:1100,orientation:0}]}];return p;
+  }
+  function toast(s){$('toast').textContent=s;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),4200);}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify({...project,draft}));$('saveState').textContent='已自动保存';}catch(e){$('saveState').textContent='存储空间不足，请下载项目';}}
+  function invalidate(){if(worker){worker.terminate();worker=null;job++;$('calcProgress').classList.add('hidden');setBusy(false);}recommendations=null;save();renderBadges();}
+  function setBusy(on){$('calculateBtn').disabled=on;$('recommendBtn').disabled=on;}
+  function stale(){return project.result&&project.result.signature!==C.fingerprint(project);}
+  function renderBadges(){const n=project.cargos.reduce((s,c)=>s+c.qty,0);$('navCargo').textContent=n;$('navGroups').textContent=project.groups.length;$('navContainers').textContent=project.result?project.result.containers.length:'—';$('staleBanner').classList.toggle('hidden',!stale());}
+  function go(p){page=p;document.querySelectorAll('.page').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+p));document.querySelectorAll('nav .nav').forEach(e=>e.classList.toggle('active',e.dataset.page===p));$('pageLabel').textContent=labels[p];$('pageDescription').textContent=descriptions[p];if(p==='cargo')renderCargo();if(p==='stack')renderStack();if(p==='pack'){renderConfig();renderResults();}if(p==='instructions')renderInstructions();window.scrollTo(0,0);}
+  function metric(label,value,unit,sub='',accent=false){return `<div class="metric ${accent?'accent':''}"><div class="label">${label}</div><div class="number">${value}<small>${unit}</small></div><div class="sub">${sub}</div></div>`;}
+  function empty(title,detail){return `<div class="empty"><div class="empty-symbol">▧</div><h3>${title}</h3><p>${detail}</p></div>`;}
+  function dialog(title,body,buttons=[]){
+    $('modalContent').innerHTML=`<div class="modal-head"><h2>${esc(title)}</h2><button class="close-modal" aria-label="关闭对话框">×</button></div><div class="modal-body">${body}</div><div class="modal-footer">${buttons.map((b,i)=>`<button data-modal-action="${i}" class="${b.primary?'primary':''} ${b.danger?'danger':''}">${esc(b.label)}</button>`).join('')}</div>`;
+    $('modalContent').querySelector('.close-modal').onclick=()=>$('modal').close();
+    $('modalContent').querySelectorAll('[data-modal-action]').forEach(e=>e.onclick=()=>buttons[+e.dataset.modalAction].run());
+    if(!$('modal').open)$('modal').showModal();
+  }
+  function confirmAction(title,text,run){dialog(title,`<p>${esc(text)}</p>`,[{label:'取消',run:()=>$('modal').close()},{label:'确认',primary:true,run:()=>{$('modal').close();run();}}]);}
+  function download(filename,content,type='application/json'){const url=URL.createObjectURL(new Blob([content],{type})),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  function nameFile(s){return (s||'装柜项目').replace(/[<>:"/\\|?*]/g,'_').slice(0,70);}
+  function allUnits(){return C.expand(project.cargos);}
+  function used(excludeId=null){return new Set(project.groups.filter(g=>g.id!==excludeId).flatMap(g=>g.children.map(p=>p.uid)));}
+  function cargoBadge(c){return `<span class="swatch" style="background:${/^#[a-f0-9]{6}$/i.test(c.color)?c.color:'#528e91'}"></span>${esc(c.name)}`;}
+  function renderCargo(){
+    const units=allUnits(),pending=units.filter(u=>u.pending).length,assigned=used().size,vol=project.cargos.reduce((s,c)=>s+c.l*c.w*c.h*c.qty/1e9,0),unknown=units.filter(u=>!C.known(u.weight)).length;
+    $('cargoMetrics').innerHTML=metric('待装箱数',fmt(units.length),'箱',project.cargos.length+' 种包装规格',true)+metric('货物净体积',fmt(vol,2),'m³','按箱体尺寸累计，不含组合空隙')+metric('已组合箱数',fmt(assigned),'箱',project.groups.length+' 个完整组合')+metric('剩余散箱',fmt(units.length-assigned),'箱',pending?pending+' 箱尺寸待补充':'可以自由组箱或直接排柜');
+    $('cargoRows').innerHTML=project.cargos.length?project.cargos.map(c=>{
+      const inGroup=units.filter(u=>u.id===c.id&&used().has(u.uid)).length;
+      return `<tr><td><strong>${cargoBadge(c)}</strong><small>${esc(c.ctnNo||'未设箱号前缀')}${c.source?' · '+esc(c.source):''}</small></td><td>${c.l&&c.w&&c.h?`${fmt(c.l)} × ${fmt(c.w)} × ${fmt(c.h)}`:'<span class="badge warning">尺寸待补全</span>'}</td><td>${fmt(c.qty)} <small>箱</small></td><td>${C.known(c.weight)?fmt(c.weight,1)+' kg':'<span class="badge warning">待确认</span>'}</td><td>${({upright:'保持直立',free:'允许翻转',none:'固定方向'})[c.rotateMode]}<small>${c.stackable?'可承叠'+(c.maxLayers?' · 最多 '+c.maxLayers+' 层':''):'不可承叠'}</small></td><td>${inGroup} / ${c.qty}</td><td><button class="table-action" data-edit-cargo="${esc(c.id)}">编辑</button><button class="table-action danger" data-delete-cargo="${esc(c.id)}">删除</button></td></tr>`;
+    }).join(''):`<tr><td colspan="7">${empty('添加第一批货物','导入装箱单、手动添加，或点击“叠箱演示”试用完整流程。')}</td></tr>`;
+    $('cargoFootnote').textContent=pending?pending+' 箱缺尺寸，会保留在未装入清单中。':unknown?unknown+' 箱重量待确认，排柜时会提示重量校验不完整。':'所有货物均已填写尺寸和重量。';renderBadges();
+  }
+  function editCargo(id){
+    const old=project.cargos.find(c=>c.id===id),c=old?C.clone(old):{id:uid('cargo'),name:'',ctnNo:'',l:1200,w:1000,h:800,qty:1,weight:null,rotateMode:'upright',stackable:true,maxLayers:0,topLoad:null,color:C.COLORS[project.cargos.length%C.COLORS.length],note:''};
+    dialog(old?'编辑货物':'添加货物',`<label class="field">品名<input id="fName" value="${esc(c.name)}" placeholder="例如：展示柜底座"></label><div class="field-grid"><label class="field">箱号前缀<input id="fCtn" value="${esc(c.ctnNo)}"></label><label class="field">包装箱数量<input id="fQty" type="number" min="1" max="2000" value="${c.qty}"></label></div><div class="field-grid three">${[['L','长',c.l],['W','宽',c.w],['H','高',c.h]].map(([k,l,v])=>`<label class="field">${l} / mm<input id="f${k}" type="number" min="0" value="${v}"></label>`).join('')}</div><div class="field-grid"><label class="field">单箱毛重 / kg<input id="fWeight" type="number" min="0" step="0.1" value="${c.weight??''}" placeholder="未知可留空"></label><label class="field">摆放方向<select id="fRotate"><option value="upright">保持直立 · 可水平旋转</option><option value="free">允许翻转 · 6 个方向</option><option value="none">固定方向</option></select></label></div><label class="check-row"><input id="fStack" type="checkbox" ${c.stackable?'checked':''}>允许在此箱上方叠放其他箱子</label><div class="field-grid"><label class="field">最多层数（含自身；0 不限制）<input id="fLayers" type="number" min="0" max="50" value="${c.maxLayers||0}"></label><label class="field">允许上压总重量 / kg<input id="fTop" type="number" min="0" value="${c.topLoad??''}" placeholder="未知可留空"></label></div><label class="field">备注<input id="fNote" value="${esc(c.note||'')}"></label><p class="hint">摆放、承叠、层数均按这里的明确设置执行；备注文字不会自动变为规则。</p>`,[{label:'取消',run:()=>$('modal').close()},{label:'保存货物',primary:true,run:()=>{
+      const v={...c,name:$('fName').value.trim(),ctnNo:$('fCtn').value.trim(),l:+$('fL').value,w:+$('fW').value,h:+$('fH').value,qty:+$('fQty').value,weight:+$('fWeight').value||null,rotateMode:$('fRotate').value,stackable:$('fStack').checked,maxLayers:+$('fLayers').value,topLoad:$('fTop').value.trim()===''?null:+$('fTop').value,note:$('fNote').value};
+      if(!v.name)return toast('请填写品名');if(![v.l,v.w,v.h].every(n=>Number.isFinite(n)&&n>=0&&n<=50000))return toast('尺寸需在 0–50000 mm 之间，0 表示待补充');if((v.weight??0)<0||(v.topLoad??0)<0||!Number.isInteger(v.maxLayers)||v.maxLayers<0)return toast('重量或层数无效');
+      const temp=C.clone(project),index=temp.cargos.findIndex(x=>x.id===c.id);if(index<0)temp.cargos.push(v);else temp.cargos[index]=v;
+      try{C.checkProject(temp);}catch(e){return toast(e.message+'；请先解散受影响的组合。');}
+      project=temp;invalidate();$('modal').close();renderCargo();toast('货物已保存');
+    }}]);$('fRotate').value=c.rotateMode;
+  }
+  function deleteCargo(id){const u=allUnits().filter(u=>u.id===id);if(u.some(u=>used().has(u.uid)))return toast('此货物已在组合中，请先解散相关组合。');confirmAction('删除货物','删除后可通过重新导入恢复。确定删除这行货物？',()=>{project.cargos=project.cargos.filter(c=>c.id!==id);draft.children=draft.children.filter(p=>!u.some(u=>u.uid===p.uid));invalidate();renderCargo();});}
+  function pushUndo(){history.push(C.clone({draft,selected}));if(history.length>50)history.shift();}
+  function draftBoxes(){try{return C.groupBoxes(draft,allUnits());}catch(e){return [];}}
+  function startGroup(g=null){draft=g?C.clone(g):{id:null,name:'组合 '+(project.groups.length+1),allowRotate:true,children:[]};selected=draft.children[0]?.uid||null;reference=null;history=[];renderStack();save();}
+  function renderStack(){
+    $('groupChips').innerHTML=project.groups.length?project.groups.map(g=>`<button class="chip ${draft.id===g.id?'active':''}" data-group="${esc(g.id)}">▣ ${esc(g.name)} <span class="badge">${g.children.length} 箱</span></button>`).join(''):'<span class="hint">还没有保存的组合，可以从右侧新建</span>';
+    $('groupName').value=draft.name;$('groupRotate').checked=draft.allowRotate!==false;$('draftBadge').textContent=draft.id?'编辑组合':'新组合';$('saveGroup').textContent=draft.id?'保存组合修改':'保存组合';$('undoBtn').disabled=!history.length;
+    renderInventory();renderDraft();renderBadges();
+  }
+  function renderInventory(){
+    const unavailable=used(draft.id);draft.children.forEach(p=>unavailable.add(p.uid));const units=allUnits(),q=$('cargoSearch').value.trim().toLowerCase();
+    $('availableCount').textContent=units.filter(u=>!unavailable.has(u.uid)).length+' 箱';
+    $('inventoryList').innerHTML=project.cargos.filter(c=>(c.name+' '+c.ctnNo).toLowerCase().includes(q)).map(c=>{const available=units.filter(u=>u.id===c.id&&!unavailable.has(u.uid));const pending=![c.l,c.w,c.h].every(n=>n>0);return `<div class="inventory-item"><strong>${cargoBadge(c)}</strong><small>${fmt(c.l)} × ${fmt(c.w)} × ${fmt(c.h)} mm</small><span class="amount">剩余 ${available.length} / ${c.qty} 箱</span><button data-add-unit="${esc(c.id)}" ${!available.length||pending?'disabled':''}>${pending?'请先补充尺寸':'＋ 加入组合'}</button></div>`;}).join('')||'<p class="hint">没有可用货物，请先导入或添加。</p>';
+  }
+  function renderDraft(updatePanel=true){
+    const bs=draftBoxes(),v=C.validate(bs,project.settings),e=C.extent(bs),bad=v.issues.filter(i=>i.severity==='error').map(i=>i.uid);
+    canvasMeta=D.render(bs,{view:stackView,selected,errors:bad,bounds:drag?.bounds});$('stackCanvas').innerHTML=canvasMeta.svg;
+    document.querySelectorAll('[data-stack-view]').forEach(b=>b.classList.toggle('active',b.dataset.stackView===stackView));
+    $('canvasHint').textContent=stackView==='top'?'拖动调整 X / Y；“放到上方”自动设置支撑高度。':stackView==='side'?'拖动调整 X / 高度 Z；前后位置 Y 可在右侧精确输入。':'立体示意预览；切回俯视或侧视继续拖动。';
+    $('groupMetrics').innerHTML=`<div><small>组合外包尺寸 / mm</small><strong>${fmt(e.L)} × ${fmt(e.W)} × ${fmt(e.H)}</strong></div><div><small>箱子 / 已知重量</small><strong>${bs.length} 箱 · ${fmt(v.weight,1)} kg</strong></div><div><small>箱体体积 / m³</small><strong>${fmt(v.volume,3)}</strong></div>`;
+    $('draftList').innerHTML=bs.map(b=>`<div class="draft-row ${b.uid===selected?'active':''}" data-select-unit="${esc(b.uid)}"><span>${cargoBadge(b)} <small>${esc(b.uid)}</small></span><span><small>Z ${fmt(b.z)}</small> <button data-remove-unit="${esc(b.uid)}" aria-label="移除 ${esc(b.uid)}">×</button></span></div>`).join('');
+    $('validationBadge').textContent=!bs.length?'等待加入':v.ok?'通过几何检查':v.issues.filter(i=>i.severity==='error').length+' 项待修正';$('validationBadge').className='badge '+(!bs.length?'':v.ok?'ok':'error');
+    $('groupIssues').innerHTML=bs.length?(!v.issues.length?'<div class="issue">底面支撑、摆放方向、层数与高度均符合当前设置。</div>':v.issues.map(i=>`<div class="issue ${i.severity}">${esc(i.message)}</div>`).join('')):'<p class="hint">加入箱子后会即时检查重叠、支撑、重量与叠箱高度。</p>';
+    $('saveGroup').disabled=!bs.length||!v.ok;if(updatePanel)renderSelection();
+  }
+  function renderSelection(){
+    const bs=draftBoxes(),b=bs.find(b=>b.uid===selected);
+    if(!b){$('selectionPanel').innerHTML='<p class="hint">点击画布中的箱子，调整其位置和摆放方向。</p>'+groupTools();bindGroupTools();return;}
+    const others=bs.filter(x=>x.uid!==selected);if(!others.some(x=>x.uid===reference))reference=others[0]?.uid||null;
+    const pos=draft.children.find(p=>p.uid===selected),names=['直立 · 长边沿 X','直立 · 长边沿 Y','侧放 · 宽度向上','侧放 · 宽度向上 / 旋转','平放 · 长度向上','平放 · 长度向上 / 旋转'];
+    $('selectionPanel').innerHTML=`<div class="selected-name">${cargoBadge(b)}</div><div class="selected-size">${esc(b.uid)} · ${fmt(b.dx)} × ${fmt(b.dy)} × ${fmt(b.dz)} mm</div><div class="field-grid three">${[['x','X 长向'],['y','Y 宽向'],['z','Z 高度']].map(([axis,label])=>`<label class="field">${label}<input data-coordinate="${axis}" aria-label="${label}" type="number" min="0" max="50000" step="10" value="${Math.round(b[axis])}"></label>`).join('')}</div><label class="field">摆放方向<select id="boxOrientation">${C.poses(b).map((p,i)=>`<option value="${i}" ${pos.orientation===i?'selected':''}>${names[i]} (${p.join('×')})</option>`).join('')}</select></label>${others.length?`<label class="field">参考箱<select id="referenceBox">${others.map(a=>`<option value="${esc(a.uid)}" ${a.uid===reference?'selected':''}>${esc(a.name)} · ${esc(a.uid)}</option>`).join('')}</select></label><div class="action-grid"><button data-align="above">放到上方</button><button data-align="right">沿 X 并排</button><button data-align="behind">沿 Y 并排</button><button data-align="center">底面居中</button><button data-align="left">左边对齐</button><button data-align="end">右边对齐</button></div>`:''}<div class="action-grid" style="margin-top:7px"><button data-align="floor">放到地面</button><button class="danger" data-remove-unit="${esc(b.uid)}">移除此箱</button></div><p class="hint">方向键移动 10 mm；Shift + 方向键移动 100 mm。拖动会吸附到相邻边。</p>${groupTools()}`;
+    $('selectionPanel').querySelectorAll('[data-coordinate]').forEach(el=>el.onchange=()=>{const n=+el.value;if(!Number.isFinite(n)||n<0||n>50000){toast('坐标范围 0–50000 mm');return renderSelection();}pushUndo();pos[el.dataset.coordinate]=n;draftChanged();});
+    $('boxOrientation').onchange=()=>{pushUndo();pos.orientation=+$('boxOrientation').value;draftChanged();};if($('referenceBox'))$('referenceBox').onchange=()=>{reference=$('referenceBox').value;};bindGroupTools();
+  }
+  function groupTools(){return draft.id?'<div class="divider"></div><div class="action-grid"><button id="copyGroupBtn">复制此组合</button><button id="dissolveGroupBtn" class="danger">解散此组合</button></div>':'';}
+  function bindGroupTools(){if($('copyGroupBtn'))$('copyGroupBtn').onclick=()=>copyGroup(draft.id);if($('dissolveGroupBtn'))$('dissolveGroupBtn').onclick=()=>confirmAction('解散组合','箱子会回到可用清单中，货物总数不变。',()=>{project.groups=project.groups.filter(g=>g.id!==draft.id);invalidate();startGroup();});}
+  function draftChanged(){save();renderInventory();renderDraft();$('undoBtn').disabled=!history.length;}
+  function addUnit(cargoId){
+    const unavailable=used(draft.id);draft.children.forEach(p=>unavailable.add(p.uid));const u=allUnits().find(u=>u.id===cargoId&&!unavailable.has(u.uid));if(!u)return toast('没有剩余箱子');
+    pushUndo();const bs=draftBoxes(),e=C.extent(bs);draft.children.push({uid:u.uid,x:e.L,y:0,z:0,orientation:0});selected=u.uid;draftChanged();
+  }
+  function removeUnit(id){pushUndo();draft.children=draft.children.filter(p=>p.uid!==id);selected=draft.children[0]?.uid||null;draftChanged();}
+  function align(action){const p=draft.children.find(p=>p.uid===selected),bs=draftBoxes(),b=bs.find(b=>b.uid===selected),r=bs.find(b=>b.uid===reference);if(!p||(!r&&action!=='floor'))return;pushUndo();
+    if(action==='above'){p.x=r.x;p.y=r.y;p.z=r.z+r.dz;}if(action==='right'){p.x=r.x+r.dx;p.y=r.y;p.z=r.z;}if(action==='behind'){p.x=r.x;p.y=r.y+r.dy;p.z=r.z;}
+    if(action==='center'){p.x=Math.max(0,r.x+(r.dx-b.dx)/2);p.y=Math.max(0,r.y+(r.dy-b.dy)/2);}if(action==='left')p.x=r.x;if(action==='end')p.x=Math.max(0,r.x+r.dx-b.dx);if(action==='floor')p.z=0;draftChanged();
+  }
+  function saveGroup(){
+    const bs=draftBoxes(),v=C.validate(bs,project.settings);if(!bs.length||!v.ok)return toast('请先修正组合检查中的问题');
+    draft.name=$('groupName').value.trim()||'组合 '+(project.groups.length+1);draft.allowRotate=$('groupRotate').checked;draft.children=C.normalize(draft.children,allUnits());
+    if(!draft.id)draft.id=uid('group');const index=project.groups.findIndex(g=>g.id===draft.id);if(index<0)project.groups.push(C.clone(draft));else project.groups[index]=C.clone(draft);
+    invalidate();renderStack();toast('组合已保存，排柜时保持内部位置和方向');
+  }
+  function copyGroup(id){
+    const g=project.groups.find(g=>g.id===id),units=allUnits(),byId=new Map(units.map(u=>[u.uid,u])),remaining=units.filter(u=>!used().has(u.uid)),need={};g.children.forEach(c=>{const k=byId.get(c.uid).id;need[k]=(need[k]||0)+1;});const max=Math.min(...Object.entries(need).map(([k,n])=>Math.floor(remaining.filter(u=>u.id===k).length/n)));
+    if(!max)return toast('剩余箱数不足，无法复制这个组合。');
+    dialog('复制组合',`<p>复制已保存的“${esc(g.name)}”。每份分配新的箱号，最多可复制 ${max} 份。</p><label class="field">复制份数<input id="copyCount" type="number" value="1" min="1" max="${max}"></label>`,[{label:'取消',run:()=>$('modal').close()},{label:'创建副本',primary:true,run:()=>{const count=+$('copyCount').value;if(!Number.isInteger(count)||count<1||count>max)return toast('请输入 1–'+max+' 之间的整数');const pool=[...remaining];for(let i=0;i<count;i++){const copy=C.clone(g);copy.id=uid('group');copy.name=g.name+' · 副本 '+(i+1);copy.children=copy.children.map(ch=>{const id=byId.get(ch.uid).id,j=pool.findIndex(u=>u.id===id),unit=pool.splice(j,1)[0];return {...ch,uid:unit.uid};});project.groups.push(copy);}invalidate();$('modal').close();renderStack();toast('已复制 '+count+' 个组合，箱数已同步');}}]);
+  }
+  function screenPoint(event){const svg=$('stackCanvas').querySelector('svg'),r=svg.getBoundingClientRect(),s=Math.min(r.width/1000,r.height/620),px=(event.clientX-r.left-(r.width-1000*s)/2)/s,py=(event.clientY-r.top-(r.height-620*s)/2)/s;return {x:(px-canvasMeta.ox)/canvasMeta.scale,y:(py-canvasMeta.oy)/canvasMeta.scale};}
+  function snapCoordinate(value,axis,b,others){let best=Math.round(value/10)*10,distance=30;if(!$('snapEnabled').checked)return best;const size=axis==='x'?'dx':axis==='y'?'dy':'dz';const points=[0];for(const a of others)points.push(a[axis],a[axis]+a[size],a[axis]-b[size],a[axis]+a[size]-b[size]);for(const p of points)if(Math.abs(value-p)<distance){best=p;distance=Math.abs(value-p);}return Math.max(0,Math.round(best));}
+  $('stackCanvas').addEventListener('pointerdown',e=>{const el=e.target.closest('[data-uid]');if(!el)return;selected=el.dataset.uid;renderDraft();if(stackView==='iso')return;const p=screenPoint(e);pushUndo();drag={start:p,position:C.clone(draft.children.find(c=>c.uid===selected)),bounds:canvasMeta.bounds,pointer:e.pointerId};$('stackCanvas').setPointerCapture(e.pointerId);e.preventDefault();});
+  $('stackCanvas').addEventListener('pointermove',e=>{if(!drag)return;const p=screenPoint(e),pos=draft.children.find(c=>c.uid===selected),bs=draftBoxes(),b=bs.find(b=>b.uid===selected),others=bs.filter(b=>b.uid!==selected);pos.x=snapCoordinate(Math.max(0,drag.position.x+p.x-drag.start.x),'x',b,others);if(stackView==='top')pos.y=snapCoordinate(Math.max(0,drag.position.y+p.y-drag.start.y),'y',b,others);else pos.z=snapCoordinate(Math.max(0,drag.position.z-(p.y-drag.start.y)),'z',b,others);renderDraft(false);});
+  function endDrag(){if(!drag)return;drag=null;draftChanged();} $('stackCanvas').addEventListener('pointerup',endDrag);$('stackCanvas').addEventListener('pointercancel',endDrag);
+  $('stackCanvas').addEventListener('keydown',e=>{if(!selected||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Delete'].includes(e.key))return;e.preventDefault();if(e.key==='Delete')return removeUnit(selected);pushUndo();const pos=draft.children.find(p=>p.uid===selected),step=e.shiftKey?100:10,axis=e.key==='ArrowLeft'||e.key==='ArrowRight'?'x':stackView==='side'?'z':'y',dir=e.key==='ArrowLeft'||(e.key==='ArrowUp'&&axis==='y')||(e.key==='ArrowDown'&&axis==='z')?-1:1;pos[axis]=Math.max(0,pos[axis]+step*dir);draftChanged();});
+  function renderConfig(){
+    $('containerRows').innerHTML=project.settings.containers.map((c,i)=>`<div class="container-row"><select aria-label="柜型 ${i+1}" data-container-type="${i}">${Object.keys(C.SPECS).map(k=>`<option ${k===c.type?'selected':''}>${k}</option>`).join('')}</select><input aria-label="柜数 ${i+1}" data-container-qty="${i}" type="number" min="1" max="30" value="${c.qty}"><span class="hint">柜</span><button data-remove-container="${i}" aria-label="删除柜型 ${i+1}" ${project.settings.containers.length<2?'disabled':''}>×</button></div>`).join('');
+    ['standardHeight','overhang','maxContainers','doorW','doorH','manualMaxWeight'].forEach(k=>$(k).value=project.settings[k]??'');$('minSupport').value=Math.round(project.settings.minSupport*100);['autoAdd','heavyBelow'].forEach(k=>$(k).checked=project.settings[k]);
+  }
+  function changeSetting(key,el){const before=project.settings[key];project.settings[key]=el.type==='checkbox'?el.checked:key==='minSupport'?+el.value/100:['doorW','doorH'].includes(key)?(+el.value||null):+el.value;try{C.checkProject(project);if(['doorW','doorH'].includes(key)&&project.settings[key]!==null&&(project.settings[key]<=0||project.settings[key]>50000))throw Error('请填写有效柜门尺寸');if(key==='manualMaxWeight'&&!(project.settings[key]>0&&project.settings[key]<=100))throw Error('补顶重量上限为 1–100 kg');}catch(e){project.settings[key]=before;el.value=before;return toast(e.message);}invalidate();renderResults();}
+  function calculate(action='pack'){
+    if(!project.cargos.length)return toast('请先添加或导入货物');try{C.checkProject(project);}catch(e){return toast(e.message);}
+    const saved=draft.id?project.groups.find(g=>g.id===draft.id):null;const unsaved=draft.children.length&&(!saved||JSON.stringify(saved.children)!==JSON.stringify(draft.children)||saved.allowRotate!==draft.allowRotate);
+    if(unsaved){dialog('叠箱草稿尚未保存','<p>当前草稿尚未保存为组合。请先保存组合，或确认按现有已保存的组合与散箱排柜。</p>',[{label:'回到叠箱工作台',run:()=>{$('modal').close();go('stack');}},{label:'使用已保存内容排柜',primary:true,run:()=>{$('modal').close();startCalculation(action);}}]);return;}startCalculation(action);
+  }
+  function startCalculation(action){
+    if(worker)worker.terminate();job++;const currentJob=job;
+    try{worker=new Worker('worker.js');}catch(e){return toast('无法启动计算，请使用在线地址或本地 HTTP 服务打开。');}
+    setBusy(true);$('calcProgress').classList.remove('hidden');$('progressText').textContent='正在整理组合与箱号…';
+    worker.onmessage=({data})=>{if(data.job!==currentJob||job!==currentJob)return;if(data.type==='progress'){$('progressText').textContent=data.progress.message||'已装入 '+data.progress.loaded+' 箱，正在计算第 '+data.progress.step+' 柜';return;}
+      worker.terminate();worker=null;setBusy(false);$('calcProgress').classList.add('hidden');if(data.type==='error')return toast(data.message);
+      if(data.type==='recommend'){recommendations=data.results;renderRecommendations();toast('柜型比较完成；点击采用后会重新计算。');return;}
+      if(data.result.signature!==C.fingerprint(project))return toast('输入已改变，请重新排柜');project.result=data.result;currentContainer=0;save();renderBadges();renderResults();toast('排柜完成：'+data.result.loaded+' / '+data.result.total+' 箱');
+    };
+    worker.onerror=e=>{worker?.terminate();worker=null;setBusy(false);$('calcProgress').classList.add('hidden');toast('计算失败：'+e.message);};worker.postMessage({project:C.clone(project),action,job:currentJob});
+  }
+  function renderRecommendations(){
+    $('recommendations').innerHTML=!recommendations?'':`<div class="card recommend-table"><div class="card-toolbar"><h2>常用柜型比较</h2><span class="hint">同一套规则 · 按未装入、柜数、总容积排序</span></div><table><thead><tr><th>柜型</th><th>需要柜数</th><th>未装入</th><th></th></tr></thead><tbody>${recommendations.map(r=>`<tr><td>${r.type}</td><td>${r.count}</td><td>${r.unpacked} 箱</td><td><button data-adopt="${r.type}">采用此柜型</button></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function renderResults(){
+    renderBadges();renderRecommendations();const r=project.result;currentContainer=Math.max(0,Math.min(currentContainer,(r?.containers.length||1)-1));
+    if(!r){$('resultSummary').innerHTML=metric('已装入','—','箱','待开始排柜',true)+metric('使用集装箱','—','柜')+metric('货物利用率','—','%')+metric('未装入','—','箱');$('containerTabs').innerHTML='<h2>排柜预览</h2>';$('resultCanvas').innerHTML=empty('把组合排进集装箱','选择左侧柜型与规则，然后点击“开始排柜”。你也可以先比较常用柜型。');$('resultCaption').innerHTML='<span>箱子坐标：X 从柜内深处指向柜门，Z 向上。</span>';$('resultIssues').innerHTML='';$('unpackedPanel').innerHTML='';$('alternative').innerHTML='';setExportEnabled(false);return;}
+    const capacity=r.containers.reduce((s,c)=>s+c.spec.L*c.spec.W*c.spec.H/1e9,0),vol=r.containers.reduce((s,c)=>s+c.volume,0);
+    $('resultSummary').innerHTML=metric('已装入',fmt(r.loaded),'箱','共 '+r.total+' 箱',true)+metric('使用集装箱',r.containers.length,'柜',r.manualAlternative?'已采用柜内补顶候选':'组合内部结构保持完整')+metric('货物利用率',capacity?pct(vol/capacity):'0%','','实际箱体体积 / 柜内容积')+metric('未装入',r.unpacked.length,'箱',r.audit.ok?'箱数核对通过':'结果校验异常');
+    $('containerTabs').innerHTML=r.containers.map((ct,i)=>`<button class="chip ${i===currentContainer?'active':''}" data-container-tab="${i}">${i+1} 号柜 · ${ct.spec.id}</button>`).join('')||'<h2>没有可装入的货物</h2>';
+    $('alternative').innerHTML=r.alternative&&!stale()?`<div class="notice amber"><div><b>发现一个可少用 1 柜的补顶候选</b><p>末柜 1–2 个轻箱可在柜内单独补顶，超过常规高度。需现场确认搬运、加固与操作路径。</p></div><button id="adoptAlternative">查看并采用候选</button></div>`:r.manualAlternative?'<div class="notice amber">当前为已确认的柜内补顶候选。装柜清单已标明补顶箱；此示意不证明箱子实际进入与搬运路径。</div>':'';
+    const ct=r.containers[currentContainer];renderResultCanvas();
+    $('resultCaption').innerHTML=ct?`<span>内尺寸 ${ct.spec.L} × ${ct.spec.W} × ${ct.spec.H} mm · ${ct.boxes.length} 箱 · ${pct(ct.utilization)}</span><span>深处 ← X → 柜门</span>`:'<span>检查下方未装入原因。</span>';
+    const issues=ct?ct.issues:[];$('resultIssues').innerHTML=`<div class="result-issues">${issues.map(i=>`<div class="issue ${i.severity}">${esc(i.message)}</div>`).join('')}${ct&&!project.settings.doorH?'<div class="issue warning">尚未填写实际柜门净尺寸，进门条件待核实。</div>':''}${r.audit.ok?'<div class="issue">数量核对通过：已装入 + 未装入 = 原始箱数</div>':r.audit.issues.map(t=>`<div class="issue error">${esc(t)}</div>`).join('')}</div>`;
+    $('unpackedPanel').innerHTML=r.unpacked.length?`<div class="card unpacked"><h2>未装入清单 · ${r.unpacked.length} 箱</h2><div class="table-wrap"><table><thead><tr><th>品名 / 箱子编号</th><th>原因</th></tr></thead><tbody>${r.unpacked.map(b=>`<tr><td>${esc(b.name)}<small>${esc(b.uid)}</small></td><td>${esc(b.reason)}</td></tr>`).join('')}</tbody></table></div></div>`:'';
+    setExportEnabled(!stale()&&r.audit.ok);
+  }
+  function setExportEnabled(on){['exportCSV','exportSVG','printBtn'].forEach(k=>$(k).disabled=!on);}
+  function disposeViewer(){if(!viewer)return;cancelAnimationFrame(viewer._raf);viewer.controls?.dispose();viewer.scene?.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}}});viewer.renderer?.dispose();viewer=null;}
+  function renderResultCanvas(){
+    disposeViewer();const ct=project.result?.containers[currentContainer];if(!ct){$('resultCanvas').innerHTML=empty('没有已装入的箱子','请检查未装入原因，调整组合或柜型后重算。');return;}
+    document.querySelectorAll('[data-pack-view]').forEach(b=>b.classList.toggle('active',b.dataset.packView===packView));
+    if(packView==='three'){
+      $('resultCanvas').innerHTML='<canvas id="threeCanvas" aria-label="可旋转的三维排柜图"></canvas>';
+      try{const canvas=$('threeCanvas');if(!window.THREE||!canvas.getContext('webgl2')&&!canvas.getContext('webgl'))throw Error('WebGL 不可用');viewer=new Viewer3D(canvas);viewer.build(ct.spec,ct.boxes);viewer.setShellMode('wire');}catch(e){disposeViewer();$('resultCanvas').innerHTML=D.render(ct.boxes,{view:'iso',bounds:ct.spec,container:true}).svg;toast('此浏览器不支持 WebGL，已显示立体示意图，其他功能可正常使用。');}
+    }else $('resultCanvas').innerHTML=D.render(ct.boxes,{view:packView,bounds:ct.spec,container:true}).svg;
+  }
+  function ensureResult(){if(!project.result)return toast('请先排柜'),false;if(stale())return toast('结果已过期，请重新排柜'),false;const audit=C.audit(project,project.result);if(!audit.ok)return toast('结果校验未通过：'+audit.issues[0]),false;return true;}
+  function renderInstructions(){
+    const r=project.result;if(!r){$('instructionsContent').innerHTML=`<div class="card">${empty('完成排柜后生成装柜指引','这里将显示每柜的装箱明细、组合关系和操作顺序。')}</div>`;return;}
+    const status=stale()?'结果已过期，请重算后导出':r.manualAlternative?'含柜内补顶箱，需按标注单独操作':'按已保存组合装柜';
+    $('instructionsContent').innerHTML=`<div class="print-toolbar"><div><h2>${esc(project.name)} · 装柜指引</h2><p class="subheading">${status} · 计算时间 ${new Date(r.createdAt).toLocaleString('zh-CN')}</p></div><div class="tools"><button id="instructionsCSV">导出明细</button><button class="primary" id="instructionsPrint" ${stale()?'disabled':''}>打印 / 保存 PDF</button></div></div><div class="notice amber">这是最终位置与建议装柜次序，尚未模拟搬运路径、箱体变形或运输中的受力。请结合实际柜门、箱体承压、人员设备与加固方式复核。</div><div class="instruction-card card"><h2>装柜前核对</h2><div class="step"><span class="step-no">1</span><div><h3 style="margin-top:2px">按组合编号备箱</h3><p>组合内部尺寸和方向保持一致。常规叠箱高度 ${project.settings.standardHeight} mm；先核对箱号与已知重量。</p></div></div><div class="step"><span class="step-no">2</span><div><h3 style="margin-top:2px">从柜内深处向柜门装入</h3><p>同一组合先底层后上层；下表按深处优先排列。X = 0 为柜内最深处，X 最大端为柜门，Y 为宽向，Z 为离地高度。</p></div></div><div class="step"><span class="step-no">3</span><div><h3 style="margin-top:2px">完成后核对数量与加固</h3><p>总箱数 ${r.total} = 已装入 ${r.loaded} + 未装入 ${r.unpacked.length}。未填重量、允许上压重量与补顶操作须现场确认。</p></div></div></div>`+r.containers.map((ct,i)=>`<article class="card instruction-card"><h2>${i+1} 号柜 · ${ct.spec.id}</h2><p class="subheading">${ct.boxes.length} 箱 · 箱体体积 ${fmt(ct.volume,3)} m³ · 利用率 ${pct(ct.utilization)} · 已知重量 ${fmt(ct.weight,1)} kg ${ct.unknownWeights?'（'+ct.unknownWeights+' 箱重量未知）':''}</p><div style="height:240px">${D.render(ct.boxes,{view:'iso',bounds:ct.spec,container:true}).svg}</div><div class="table-wrap"><table class="instructions-table"><thead><tr><th>序号</th><th>货物 / 箱号</th><th>组合</th><th>实际摆放尺寸 mm</th><th>坐标 X / Y / Z mm</th><th>操作</th></tr></thead><tbody>${ct.boxes.map(b=>`<tr><td>${b.seq}</td><td>${esc(b.name)}<small>${esc(b.ctnNo||b.id)}-${b.index} · ${esc(b.uid)}</small></td><td>${esc(b.groupName||'散箱')}</td><td>${b.dx} × ${b.dy} × ${b.dz}</td><td>${b.x} / ${b.y} / ${b.z}</td><td>${b.manual?'柜内单独补顶':b.groupId?'保持组合':'单箱装入'}</td></tr>`).join('')}</tbody></table></div></article>`).join('')+(r.unpacked.length?`<div class="card instruction-card"><h2>未装入 · ${r.unpacked.length} 箱</h2>${r.unpacked.map(b=>`<p class="subheading">${esc(b.name)} · ${esc(b.uid)}：${esc(b.reason)}</p>`).join('')}</div>`:'');
+    $('instructionsCSV').onclick=exportCSV;$('instructionsPrint').onclick=print;
+  }
+  function exportCSV(){if(!ensureResult())return;const rows=[['柜序号','柜型','装入序号','品名','原箱号','箱子唯一编号','组合名称','长mm','宽mm','高mm','Xmm','Ymm','Zmm','单箱重量kg','摆放方向索引','操作','未装入原因']];for(const [i,c] of project.result.containers.entries())for(const b of c.boxes)rows.push([i+1,c.spec.id,b.seq,b.name,b.ctnNo,b.uid,b.groupName||'',b.dx,b.dy,b.dz,b.x,b.y,b.z,b.weight??'未知',b.orientation,b.manual?'柜内补顶':'常规装入','']);for(const b of project.result.unpacked)rows.push(['','','',b.name,'',b.uid,'','','','','','','','','','未装入',b.reason]);
+    if(window.XLSX){const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'装柜明细');const rules=[['项目',project.name],['版本',VERSION],['常规高度mm',project.settings.standardHeight],['支撑率',project.settings.minSupport],['单方向总外挑mm',project.settings.overhang],['总箱数',project.result.total],['已装入',project.result.loaded],['未装入',project.result.unpacked.length],['说明','位置示意未模拟实际搬运路径；重量与承压缺失项须复核']];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rules),'规则与核对');XLSX.writeFile(wb,nameFile(project.name)+'_装柜明细.xlsx');}else download(nameFile(project.name)+'_装柜明细.csv','\ufeff'+rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n'),'text/csv;charset=utf-8');}
+  function print(){if(!ensureResult())return;go('instructions');window.print();}
+  function importCargo(file){
+    if(!window.XLSX)return toast('Excel 解析库加载失败，请刷新后重试');file.arrayBuffer().then(ab=>{
+      let wb;try{wb=XLSX.read(new Uint8Array(ab),{type:'array'});}catch(e){return toast('无法读取表格，请检查文件格式');}
+      let parsed=PlannerImport.workbook(wb,1);
+      const render=()=>{const rows=parsed.flatMap(s=>s.rows),invalid=rows.filter(r=>r.invalid).length;dialog('导入预览 · '+file.name,`<div class="field-grid"><label class="field">原表尺寸单位<select id="importUnit"><option value="1">毫米 mm</option><option value="10">厘米 cm</option><option value="1000">米 m</option><option value="25.4">英寸 inch</option></select></label><div><p class="hint">将追加到当前项目。可选择多个工作表；缺尺寸的行保留为待补全货物。</p></div></div><div class="import-review">${parsed.map((s,i)=>`<label class="check-row"><input type="checkbox" data-sheet="${i}" ${s.rows.length?'checked':''} ${!s.rows.length?'disabled':''}>${esc(s.sheet)} · ${s.rows.length} 行</label>${s.rows.slice(0,6).map(r=>`<div class="issue ${r.invalid?'error':r.warnings?.length?'warning':'info'}">${esc(r.cargo?.name||r.name)} · ${r.invalid?esc(r.reason):`${r.cargo.qty} 箱 · ${r.cargo.l} × ${r.cargo.w} × ${r.cargo.h} mm`}${r.warnings?.length?' · '+esc(r.warnings.join('；')):''}</div>`).join('')}${s.rows.length>6?`<p class="hint">另外 ${s.rows.length-6} 行会一并导入。</p>`:''}${!s.rows.length?`<p class="hint">${esc(s.warnings.join('；'))}</p>`:''}`).join('')}</div>${invalid?'<p class="hint danger">含箱数无效行的工作表无法导入，请先修正原表。</p>':''}`, [{label:'取消',run:()=>$('modal').close()},{label:'确认追加导入',primary:true,run:()=>{
+        const selectedSheets=[...document.querySelectorAll('[data-sheet]:checked')].map(e=>+e.dataset.sheet),toAdd=selectedSheets.flatMap(i=>parsed[i].rows);if(!toAdd.length)return toast('没有选择可导入的工作表');if(toAdd.some(r=>r.invalid))return toast('所选工作表含无效箱数，请先修正原表。');const temp=C.clone(project);temp.cargos.push(...toAdd.map(r=>r.cargo));try{C.checkProject(temp);}catch(e){return toast(e.message);}project=temp;invalidate();$('modal').close();renderCargo();toast('已追加 '+toAdd.length+' 种货物，共 '+toAdd.reduce((s,r)=>s+r.cargo.qty,0)+' 箱');
+      }}]);};
+      render();let scale=1;const bind=()=>{$('importUnit').value=String(scale);$('importUnit').onchange=()=>{scale=+$('importUnit').value;parsed=PlannerImport.workbook(wb,scale);render();bind();};};bind();
+    }).catch(e=>toast('读取失败：'+e.message));
+  }
+  function template(){if(!window.XLSX)return toast('模板库尚未加载，请刷新');const rows=[['品名','箱号','长mm','宽mm','高mm','箱数','单箱重量kg','摆放方向','允许承叠','最大层数','上压重量kg','备注'],['展示柜底座','A',1200,1000,1100,6,80,'upright','是',3,200,'演示数据'],['上层模块','B',600,1000,650,12,18,'upright','是',2,40,'重量未知可留空']];const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=rows[0].map(()=>({wch:18}));XLSX.utils.book_append_sheet(wb,ws,'货物清单');XLSX.writeFile(wb,'SUPER_U_货物导入模板.xlsx');}
+  function help(){dialog('v2 测试说明',`<p><b>建议先用内置演示测试：</b>进入叠箱工作台 → 选择“一托二”组合 → 复制组合 → 集装箱排柜 → 开始排柜。</p><div class="divider"></div><p>支持：Excel / CSV 多工作表预览、单箱位置与方向、平面拖动和吸附、一托二与二托一、同底面自动组箱、组合复制与解散、混合柜型、常用柜型比较、补顶候选、项目保存、Excel 明细、打印 PDF。</p><div class="divider"></div><p>当前范围：手工组合保持完整，仅整组水平旋转；组合在柜底安排，内部空隙不自动塞箱。散箱可以在有效支撑面上继续叠放。柜型比较未计运价，启发式结果不保证全局最优。</p><div class="divider"></div><p>排柜是位置与规则检查，尚未模拟实际进门与搬运路径、运输振动和箱体变形。默认全支撑、无外挑；承重缺失会提示待确认。前方指柜内深处。</p><div class="divider"></div><p>项目只保存在当前浏览器。更换电脑前下载项目 JSON；修改货物、组合或规则后必须重新排柜。</p>`,[{label:'知道了',primary:true,run:()=>$('modal').close()}]);}
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.page)return go(b.dataset.page);if(b.dataset.action==='calculate'){go('pack');return calculate();}
+    if(b.dataset.editCargo)return editCargo(b.dataset.editCargo);if(b.dataset.deleteCargo)return deleteCargo(b.dataset.deleteCargo);
+    if(b.dataset.addUnit)return addUnit(b.dataset.addUnit);if(b.dataset.removeUnit){e.stopPropagation();return removeUnit(b.dataset.removeUnit);}if(b.dataset.align)return align(b.dataset.align);
+    if(b.dataset.group){const g=project.groups.find(g=>g.id===b.dataset.group);return switchDraft(()=>startGroup(g));}
+    if(b.dataset.stackView){stackView=b.dataset.stackView;return renderDraft();}if(b.dataset.packView){packView=b.dataset.packView;return renderResultCanvas();}
+    if(b.dataset.containerTab!==undefined){currentContainer=+b.dataset.containerTab;return renderResults();}
+    if(b.dataset.removeContainer!==undefined){project.settings.containers.splice(+b.dataset.removeContainer,1);invalidate();return renderConfig();}
+    if(b.dataset.adopt){project.settings.containers=[{type:b.dataset.adopt,qty:1}];project.settings.autoAdd=true;invalidate();renderConfig();return startCalculation('pack');}
+    if(b.id==='adoptAlternative')confirmAction('确认采用补顶候选','此方案少用 1 柜，但包含超过常规叠箱高度的柜内补顶箱。生产需另行确认逐箱搬运、承压和加固。是否采用并标记？',()=>{project.result=project.result.alternative;save();renderResults();});
+  });
+  $('draftList').onclick=e=>{if(e.target.closest('button'))return;const row=e.target.closest('[data-select-unit]');if(row){selected=row.dataset.selectUnit;renderDraft();}};
+  function switchDraft(fn){const saved=project.groups.find(g=>g.id===draft.id);if(draft.children.length&&(!saved||JSON.stringify(saved)!==JSON.stringify(draft)))return confirmAction('切换组合','当前草稿有未保存的修改。切换会放弃这些草稿修改。',fn);fn();}
+  $('newGroup').onclick=()=>switchDraft(()=>startGroup());$('groupName').oninput=()=>{draft.name=$('groupName').value;save();};$('groupRotate').onchange=()=>{pushUndo();draft.allowRotate=$('groupRotate').checked;save();};$('cargoSearch').oninput=renderInventory;
+  $('saveGroup').onclick=saveGroup;$('undoBtn').onclick=()=>{const h=history.pop();if(h){draft=h.draft;selected=h.selected;draftChanged();}};$('resetDraft').onclick=()=>{pushUndo();draft.children=[];selected=null;draftChanged();};
+  $('autoGroup').onclick=()=>switchDraft(()=>{const gs=C.autoGroup(project);if(!gs.length)return toast('没有可组合的同底面散箱，或当前叠箱规则不允许。');project.groups.push(...gs);invalidate();startGroup(gs[0]);toast('已生成 '+gs.length+' 个同底面组合');});
+  $('addCargo').onclick=()=>editCargo();$('demoBtn').onclick=()=>confirmAction('载入叠箱演示','将替换当前项目。需要保留当前内容时，请先下载项目。演示包含一托二组合与可复制的剩余箱子。',()=>{project=demoProject();draft={id:null,name:'新组合',allowRotate:true,children:[]};$('projectName').value=project.name;invalidate();startGroup(project.groups[0]);go('stack');});
+  $('newProject').onclick=()=>confirmAction('新建空白项目','当前内容会被空白项目替换，需要保留时请先下载项目。',()=>{project=emptyProject();startGroup();$('projectName').value=project.name;invalidate();go('cargo');});
+  $('projectName').onchange=()=>{project.name=$('projectName').value.trim()||'未命名装柜项目';save();};
+  $('saveProject').onclick=()=>download(nameFile(project.name)+'_v2.json',JSON.stringify({...project,draft,exportedAt:new Date().toISOString()},null,2));
+  $('openProject').onclick=()=>$('projectFile').click();$('projectFile').onchange=async()=>{const f=$('projectFile').files[0];if(!f)return;try{if(f.size>15e6)throw Error('项目文件过大');const p=JSON.parse(await f.text());C.checkProject(p);if(p.result){const audit=C.audit(p,p.result);if(!audit.ok||p.result.signature!==C.fingerprint(p))p.result=null;}confirmAction('打开项目','将替换当前项目，载入“'+(p.name||f.name)+'”。',()=>{project=p;draft=p.draft||{id:null,name:'新组合',allowRotate:true,children:[]};const ids=new Set(allUnits().map(u=>u.uid));draft.children=draft.children.filter(c=>ids.has(c.uid));selected=draft.children[0]?.uid||null;$('projectName').value=project.name;invalidate();go('cargo');toast('项目已恢复，组合和箱号已校验');});}catch(e){toast('无法打开：'+e.message);}finally{$('projectFile').value='';}};
+  $('importBtn').onclick=()=>$('cargoFile').click();$('cargoFile').onchange=()=>{const f=$('cargoFile').files[0];if(f)importCargo(f);$('cargoFile').value='';};$('templateBtn').onclick=template;
+  $('containerRows').onchange=e=>{const el=e.target,before=C.clone(project.settings.containers);if(el.dataset.containerType!==undefined)project.settings.containers[+el.dataset.containerType].type=el.value;if(el.dataset.containerQty!==undefined)project.settings.containers[+el.dataset.containerQty].qty=+el.value;try{C.checkProject(project);}catch(err){project.settings.containers=before;renderConfig();return toast(err.message);}invalidate();renderResults();};
+  $('addContainer').onclick=()=>{if(project.settings.containers.reduce((s,c)=>s+c.qty,0)>=30)return toast('最多配置 30 柜');project.settings.containers.push({type:'40HQ',qty:1});invalidate();renderConfig();};
+  ['standardHeight','minSupport','overhang','maxContainers','autoAdd','heavyBelow','doorW','doorH','manualMaxWeight'].forEach(k=>$(k).onchange=()=>changeSetting(k,$(k)));
+  $('calculateBtn').onclick=()=>calculate();$('recommendBtn').onclick=()=>calculate('recommend');$('cancelCalc').onclick=()=>{worker?.terminate();worker=null;job++;setBusy(false);$('calcProgress').classList.add('hidden');toast('已取消，之前的结果保留');};
+  $('exportCSV').onclick=exportCSV;$('exportSVG').onclick=()=>{if(!ensureResult())return;const ct=project.result.containers[currentContainer];if(ct)download(nameFile(project.name)+'_第'+(currentContainer+1)+'柜.svg',D.render(ct.boxes,{view:packView==='three'?'iso':packView,bounds:ct.spec,container:true}).svg,'image/svg+xml');};$('printBtn').onclick=print;$('helpBtn').onclick=help;
+  try{const raw=localStorage.getItem(KEY);if(raw){project=JSON.parse(raw);C.checkProject(project);draft=project.draft||draft;if(project.result&&(!C.audit(project,project.result).ok||project.result.signature!==C.fingerprint(project)))project.result=null;}else{project=demoProject();draft=C.clone(project.groups[0]);}}catch(e){project=demoProject();draft=C.clone(project.groups[0]);toast('旧草稿无法读取，已载入演示；可重新打开下载的项目文件。');}
+  selected=draft.children[0]?.uid||null;$('projectName').value=project.name;save();go('cargo');
+})();
