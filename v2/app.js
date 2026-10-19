@@ -1,7 +1,7 @@
 (function(){
   'use strict';
   const C=PlannerCore,D=PlannerDrawing,S=PlannerStack,$=id=>document.getElementById(id),esc=D.esc;
-  const KEY='super-u-prestack-v2',VERSION='2.1.0-beta';
+  const KEY='super-u-prestack-v2',VERSION='2.1.1-beta';
   const labels={cargo:'装箱清单',stack:'叠箱组合',pack:'集装箱排柜',instructions:'装柜明细'};
   const descriptions={cargo:'导入装箱单，核对尺寸、数量和叠放限制。',stack:'把需要一起装的箱子固定成组，其余箱子按规则灵活安排。',pack:'组合和散箱一起排入集装箱，保留每个组合的内部结构。',instructions:'核对箱号、组合和装柜次序，导出给生产同事。'};
   const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
@@ -19,7 +19,7 @@
     p.groups=[{id:'demo-g1',name:'一托二 · 底座 + 模块',allowRotate:true,children:[{uid:'base#1',x:0,y:0,z:0,orientation:0},{uid:'upper#1',x:0,y:0,z:1100,orientation:0},{uid:'upper#2',x:600,y:0,z:1100,orientation:0}]}];return p;
   }
   function toast(s){$('toast').textContent=s;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),4200);}
-  function save(){try{localStorage.setItem(KEY,JSON.stringify({...project,draft}));$('saveState').textContent='已自动保存';}catch(e){$('saveState').textContent='存储空间不足，请下载项目';}}
+  function save(){project.appVersion=VERSION;try{localStorage.setItem(KEY,JSON.stringify({...project,draft}));$('saveState').textContent='已自动保存';}catch(e){$('saveState').textContent='存储空间不足，请下载项目';}}
   function invalidate(){if(worker){worker.terminate();worker=null;job++;$('calcProgress').classList.add('hidden');setBusy(false);}recommendations=null;save();renderBadges();}
   function setBusy(on){$('calculateBtn').disabled=on;$('recommendBtn').disabled=on;}
   function stale(){return project.result&&project.result.signature!==C.fingerprint(project);}

@@ -2,7 +2,7 @@
   'use strict';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function render(bs,{view='iso',bounds=null,selected=null,errors=[],container=false,compact=false}={}){
-    const width=1000,height=620,pad=65,e=PlannerCore.extent(bs);
+    const width=compact?620:1000,height=620,pad=compact?35:65,e=PlannerCore.extent(bs);
     const dim=bounds||{L:Math.max(2400,e.L+300),W:Math.max(2000,e.W+300),H:Math.max(2800,e.H+150)};
     const raw=(x,y,z)=>view==='top'?[x,y]:view==='side'?[x,-z]:[(x-y)*.86,(x+y)*.30-z*.9];
     const corners=[[0,0,0],[dim.L,0,0],[dim.L,dim.W,0],[0,dim.W,0],[0,0,dim.H],[dim.L,0,dim.H],[dim.L,dim.W,dim.H],[0,dim.W,dim.H]];
@@ -12,7 +12,7 @@
     const poly=(ps,fill,stroke='#8496ae',extra='')=>`<polygon points="${pstr(ps)}" fill="${fill}" stroke="${stroke}" ${extra}/>`;
     const line=(a,b,color='#e0e7f0',dash='')=>`<line x1="${pt(...a)[0]}" y1="${pt(...a)[1]}" x2="${pt(...b)[0]}" y2="${pt(...b)[1]}" stroke="${color}" stroke-width="1" ${dash?`stroke-dasharray="${dash}"`:''}/>`;
     const label=(p,text,opts='')=>`<text x="${pt(...p)[0]}" y="${pt(...p)[1]}" font-family="system-ui,Microsoft YaHei,sans-serif" font-size="13" fill="#718198" text-anchor="middle" ${opts}>${esc(text)}</text>`;
-    let s=`<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="620" viewBox="0 0 ${width} ${height}" role="img" aria-label="${container?'排柜':'叠箱'}${view==='top'?'俯视图':view==='side'?'侧视图':'立体示意图'}"><rect width="1000" height="620" fill="#f8fafc"/>`;
+    let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="620" viewBox="0 0 ${width} ${height}" role="img" aria-label="${container?'排柜':'叠箱'}${view==='top'?'俯视图':view==='side'?'侧视图':'立体示意图'}"><rect width="${width}" height="620" fill="#f8fafc"/>`;
     s+=view==='side'?poly([[0,0,0],[dim.L,0,0],[dim.L,0,dim.H],[0,0,dim.H]],'#f3f6fb','#d4dfec'):poly(corners.slice(0,4),'#f1f5fa','#d4dfec');
     const step=Math.max(500,Math.ceil(dim.L/20/500)*500);
     for(let x=step;x<dim.L;x+=step)s+=line([x,0,0],view==='side'?[x,0,dim.H]:[x,dim.W,0]);
