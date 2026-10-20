@@ -47,7 +47,7 @@
   document.querySelectorAll('[data-select]').forEach(n=>n.onclick=()=>{selected=n.dataset.select;renderWorkbench();});
   $('check3d').innerHTML=bs.length?(v.ok?'<div>✓ 几何摆放、朝向和已填写的限制符合当前规则</div>':'')+v.issues.map(i=>'<div class="'+(i.severity==='error'?'bad':'warn')+'">'+esc(i.message)+'</div>').join(''):'';
   const e=C.extent(bs);$('stackSize').textContent=bs.length?bs.length+' 箱 · '+[e.L-Math.min(...bs.map(b=>b.x)),e.W-Math.min(...bs.map(b=>b.y)),e.H].map(Math.round).join(' × ')+' mm':'0 箱';
-  $('saveStack3d').disabled=!bs.length||!v.ok||!!readError;$('saveStack3d').textContent=saved?'保存组合修改':'保存组合';scene.setData(bs,selected,p.settings);
+  $('saveStack3d').disabled=!bs.length||!v.ok||!!readError;$('saveStack3d').textContent=saved?'保存组合修改':'保存组合';$('saveStackTop3d').disabled=$('saveStack3d').disabled;$('saveStackTop3d').textContent=saved?'保存修改':'保存组合';scene.setData(bs,selected,p.settings);
  }
  function renderGroups(){
   $('savedCount').textContent=p.groups.length+' 组';$('savedGroups').innerHTML=p.groups.length?p.groups.map(g=>{const bs=C.groupBoxes(g,units()),v=C.validate(bs,p.settings);return '<article class="saved-group '+(g.id===draft.id?'active':'')+'" data-group="'+esc(g.id)+'"><h3>'+esc(g.name)+'<span class="stack-tag '+(!v.ok?'bad':'')+'">'+(v.ok?(g.source==='auto'?'系统组合':'手动组合'):'需修正')+'</span></h3><canvas aria-label="'+esc(g.name)+' 立体组合"></canvas><div class="saved-members">'+[...bs].sort((a,b)=>a.z-b.z).map(b=>(b.z===0?'底层':'高 '+b.z+' mm')+'：'+esc(b.name)+' #'+b.index).join('<br>')+'</div><div class="stack-actions"><button class="btn xs" data-edit="'+esc(g.id)+'">调整</button><button class="btn xs" data-copy="'+esc(g.id)+'">复制一组</button><button class="btn xs" data-dissolve="'+esc(g.id)+'">解散</button></div></article>';}).join(''):'<div class="stack-empty">保存后在这里看到每一组。<br>同一只箱子只能属于一个组合。</div>';
@@ -77,7 +77,7 @@
  }
  $('modelSearch').oninput=renderCatalog;$('snap3d').onchange=e=>scene.snap=e.target.checked;$('fitScene').onclick=()=>scene.fit();document.querySelectorAll('[data-scene-view]').forEach(b=>b.onclick=()=>scene.fit(b.dataset.sceneView));
  $('stackName').oninput=e=>{draft.name=e.target.value;persist();$('draftState').textContent='草稿 · 未保存组合';$('draftState').className='stack-tag warn';};
- $('saveStack3d').onclick=saveStack;$('newStack').onclick=()=>guard(()=>{draft=fresh();selected=null;history=[];persist();render();scene.fit();feedback('从左侧拖入第一只底箱',null);});
+ $('saveStack3d').onclick=saveStack;$('saveStackTop3d').onclick=saveStack;$('newStack').onclick=()=>guard(()=>{draft=fresh();selected=null;history=[];persist();render();scene.fit();feedback('从左侧拖入第一只底箱',null);});
  $('clear3d').onclick=()=>dialog('清空工作台','清空当前草稿。已保存的组合仍可从右侧重新打开。',[{label:'取消',run:close},{label:'清空工作台',primary:true,run:()=>{change(()=>{draft=fresh();selected=null;});close();scene.fit();feedback('工作台已清空',null);}}]);
  $('undo3d').onclick=()=>{const old=history.pop();if(!old)return;draft=old.draft;selected=old.selected;persist();render();feedback('已撤销上一步',null);};$('rotate3d').onclick=()=>changeOrientation('z');$('flip3d').onclick=()=>changeOrientation('x');$('rotateSide3d').onclick=()=>changeOrientation('y');
  $('remove3d').onclick=()=>{const children=draft.children.filter(c=>c.uid!==selected),v=C.validate(C.groupBoxes({...draft,children},units()),p.settings);if(!v.ok){toast('请先移开上方箱子：'+v.issues.find(i=>i.severity==='error').message);return;}change(()=>{draft.children=children;selected=null;});};
@@ -95,7 +95,7 @@
     '<div class="auto-summary"><span>新组合 <b>'+proposal.groups.length+'</b> 组</span><span>本次组合 <b>'+proposal.combined+'</b> 箱</span><span>剩余散箱 <b>'+proposal.loose+'</b> 箱</span></div>'+
     '<p>'+(replace?'采用后替换原有组合。':'已保存的组合保持原样，只处理剩余散箱。')+'生成后可逐组调整、翻转或解散。</p>'+
     '<div class="auto-group-list">'+proposal.groups.map((g,i)=>'<article class="auto-group-preview"><strong>'+esc(g.name)+' · '+g.children.length+' 箱</strong><canvas data-auto-preview="'+i+'" aria-label="'+esc(g.name)+'预览"></canvas><p>'+g.children.map(c=>esc(all.find(u=>u.uid===c.uid).name)).join(' + ')+'</p></article>').join('')+'</div>'+
-    (!proposal.groups.length?'<p>没有找到符合当前规则的叠放搭配。可以手动组合，或在“项目与叠箱规则”中检查高度、朝向及承叠限制。</p>':'')+
+    (!proposal.groups.length?(proposal.loose===0?'<p>全部箱子已有组合。可在右侧调整已有组合，或选择“重新组合全部”生成新方案。</p>':'<p>没有找到符合当前规则的叠放搭配。可以手动组合，或在“项目与叠箱规则”中检查高度、朝向及承叠限制。</p>'):'')+
     (proposal.pending?'<p>另有 '+proposal.pending+' 箱尺寸待补充，保留为散箱。</p>':'')+
     (warnings.length?'<div class="auto-rule-notes">'+warnings.map(esc).join('<br>')+'</div>':''),
     [{label:'取消',run:close},...(proposal.groups.length?[{label:'采用并调整',primary:true,run:()=>{try{p=S.applyAutoCombine(p,proposal);draft=p.draft||fresh();selected=draft.children[0]?.uid||null;history=[];if(!persist())return;close();render();scene.fit();feedback('已打开第一组，可拖动或翻转调整；右侧可切换其他组',true);toast('已采用 '+proposal.groups.length+' 组，可继续手动调整');}catch(e){toast(e.message);}}}]:[])]);

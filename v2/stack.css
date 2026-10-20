@@ -7,3 +7,5 @@ body{overflow:auto;min-height:100vh}#stackHeader{height:64px;background:#fff;bor
 @media(min-width:1600px){#sceneWrap{height:430px}}
 @media(max-width:1150px){.catalog{max-height:950px}.saved-stacks{max-height:340px}.stack-start p{min-width:300px}#sceneWrap{height:360px}}
 @media(max-width:700px){.stack-start{margin:10px;gap:8px}.stack-start p{min-width:0;flex-basis:100%;font-size:11px}.stack-start>span{margin-left:auto}.catalog{max-height:280px}#sceneWrap{height:330px}.auto-group-list{grid-template-columns:1fr}.position-shortcuts small{margin-left:0}.selection-toolbar .btn{font-size:10px}.position-title{gap:5px}.precise-fields{gap:5px}.stack-guide{font-size:10px}#stackHeader .btn{font-size:11px}#stackHeader .stack-actions{justify-content:flex-end}.saved-stacks{max-height:340px}}
+
+.model-card.unavailable{opacity:.78}.position-title strong{font-size:13px}.position-title span{font-size:11px}#saveStackTop3d{min-width:78px}
