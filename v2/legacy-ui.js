@@ -183,10 +183,8 @@
           '<input class="mini-input" data-f="h" value="' + c.h + '"></div></td>' +
         '<td class="num"><input class="mini-input" data-f="qty" value="' + c.qty + '"></td>' +
         '<td class="num"><input class="mini-input" data-f="weight" value="' + (c.weight==null?'':c.weight) + '"></td>' +
-        '<td style="text-align:center"><input type="checkbox" data-f="stackable"' + (c.stackable ? ' checked' : '') + ' style="accent-color:var(--brand);cursor:pointer"></td>' +
-        '<td><select data-f="rotateMode" style="padding:1px 2px;font-size:11.5px">' +
-          ['upright', 'free', 'none'].map(function (k) { return '<option value="' + k + '"' + (c.rotateMode === k ? ' selected' : '') + '>' + ROT_LABEL[k] + '</option>'; }).join('') +
-          '</select></td>' +
+        '<td style="text-align:center"><button class="cargo-rule-link" data-act="rules" title="在项目与叠箱规则中修改">' + (c.stackable!==false?'可叠':'禁压') + '</button></td>' +
+        '<td><button class="cargo-rule-link" data-act="rules" title="在项目与叠箱规则中修改">' + ROT_LABEL[c.rotateMode] + '</button></td>' +
         '<td class="foot-td" title="姿态示意：高亮面 = 贴柜底（底面）">' + boxSVG(c) + '</td>' +
         '<td style="text-align:center"><button class="btn xs danger" data-act="del">×</button></td>' +
         '</tr>';
@@ -221,6 +219,7 @@
       var tr = e.target.closest('tr'); if (!tr) return;
       var i = +tr.dataset.i, c = S.cargos[i]; if (!c) return;
       var act = e.target.dataset.act;
+      if(act==='rules'){openRules(c.id);return;}
       if (act === 'del') { if(S.groups.concat(S.draft?[S.draft]:[]).some(function(g){return g.children.some(function(p){return p.uid.indexOf(c.id+'#')===0;});})){toast('此货物已在组合中，请先到叠箱页解散组合。','warn');return;} S.cargos.splice(i, 1); renderCargoTable(); save(); }
       else if (act === 'color') {
         var ip = document.createElement('input');
@@ -244,13 +243,7 @@
     loading(true, '正在求解装柜方案…');
     setTimeout(function () {
       try {
-        var opt = {
-          supportRatio: (+$('rgSupport').value || 100) / 100,
-          maxContainers: +$('inMaxCtn').value || 20,
-          multiContainer: $('ckMulti').checked,
-          sameKindFirst: $('ckSameKind') ? $('ckSameKind').checked : false,
-          preferredSpecs: S.ctnSpecs   // 用户手动选定的柜型列表 [{spec, qty}, ...]
-        };
+        var opt = currentOptions();
         S._lastOpt = opt;
         var t0 = performance.now();
         var project = PlannerBridge.fromLegacy(S, opt);
@@ -277,8 +270,7 @@
         toast('计算完成：' + s.containerCount + ' 个柜，装入 ' + s.packedUnits + '/' + s.totalUnits +
           ' 箱，平均利用率 ' + pct(s.avgVolumeRate) + '（耗时 ' + ms + 'ms）',
           s.unpackedUnits ? 'warn' : 'ok');
-        var warnings = S.result.warnings || [];
-        if(warnings.length) modal('排柜规则提醒', '<div class="warn-box">'+warnings.map(esc).join('<br>')+'</div>', [{t:'知道了',cls:'primary'}]);
+        renderRuleCard();
         if (window._sgSet) window._sgSet(4);  /* 步骤指引跳到第4步 */
       } catch (err) {
         console.error(err);
@@ -590,10 +582,21 @@
         $('glBadge').style.display='none';$('legend').style.display='none';
         viewer.build(S.spec,[]);
       }
-      return true;
+      renderRuleCard();return true;
     } catch(e) {toast(e.message,'err');return false;}
   }
-  function currentOptions(){return {supportRatio:+$('rgSupport').value/100,maxContainers:+$('inMaxCtn').value,multiContainer:$('ckMulti').checked,sameKindFirst:$('ckSameKind').checked,preferredSpecs:S.ctnSpecs};}
+  function currentOptions(){return {supportRatio:S.settings.minSupport,maxContainers:S.settings.maxContainers,multiContainer:S.settings.autoAdd,sameKindFirst:!!S.settings.sameKindFirst,preferredSpecs:S.ctnSpecs};}
+  function renderRuleCard(){
+    $('ruleSummary').textContent=PlannerRules.summary(S.settings);
+    var details=S.result&&S.result.warningDetails||[],capacities=details.filter(function(w){return w.code==='capacityUnknown';}),names=Array.from(new Set(capacities.map(function(w){return w.name;}))),other=details.some(function(w){return w.code==='weightUnknown';}),notice=$('ruleNotice');
+    notice.hidden=!names.length&&!other;notice.innerHTML=(names.length?'承压资料待补全：'+names.map(esc).join('、')+'。空白表示待确认，排柜已完成。<button class="btn xs" id="completeCapacity">补充箱型规则</button>':'')+(other?'<div>部分单箱重量未填写，请在货物清单补充。</div>':'');
+    if($('completeCapacity'))$('completeCapacity').onclick=function(){openRules(capacities[0].cargoId);};
+  }
+  function openRules(cargoId){stopPlay();PlannerRules.open({
+    getProject:function(){return PlannerBridge.fromLegacy(S,currentOptions());},selectedCargoId:typeof cargoId==='string'?cargoId:null,
+    onApply:function(next){S.cargos=next.cargos;S.settings=next.settings;S.groups=next.groups;S.draft=next.draft||null;S.title=next.name;var ok=save();renderCargoTable();renderRuleCard();if(ok)toast('规则已同步，请重新排柜','ok');return ok;},
+    onBackup:function(){$('btnSaveJson').click();},onOpen:function(){$('fileJson').click();},onImport:function(){$('fileXlsx').dataset.tpl='';$('fileXlsx').click();}
+  });}
   function restore() {
     try {
       var d = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
@@ -704,12 +707,11 @@
     // 首屏默认空白：由用户自行导入箱单或添加物品，不再预载示例/自动恢复旧草稿
     try {var saved=PlannerBridge.read();S.cargos=saved.cargos;S.title=saved.name;S.groups=saved.groups;S.settings=saved.settings;S.draft=saved.draft||null;
       S.ctnSpecs=saved.settings.containers.map(function(c){return {spec:ContainerLib.byId(c.type),qty:c.qty};});
-      $('rgSupport').value=saved.settings.minSupport*100;$('labSup').textContent=$('rgSupport').value+'%';$('inMaxCtn').value=saved.settings.maxContainers;$('ckMulti').checked=saved.settings.autoAdd;$('ckSameKind').checked=!!saved.settings.sameKindFirst;
       renderCtnList();updCtnVolLab();$('stackGroupCount').textContent=S.groups.length?'('+S.groups.length+')':'';
     }catch(e){toast('已有项目读取失败：'+e.message,'err');}
     renderCargoTable();
     $('btnStackPage').onclick=function(){stopPlay();if(save())location.href='stack.html';};
-    ['rgSupport','inMaxCtn','ckMulti','ckSameKind'].forEach(function(id){$(id).addEventListener('change',save);});
+    $('btnProjectRules').onclick=function(){openRules();};renderRuleCard();
 
     /* 顶栏 */
     $('btnImportTpl').addEventListener('click', function () { $('fileXlsx').dataset.tpl = '1'; $('fileXlsx').click(); });
@@ -731,7 +733,6 @@
 
     /* 左栏 */
     $('btnRecommend').addEventListener('click', recommend);
-    $('rgSupport').addEventListener('input', function () { $('labSup').textContent = this.value + '%'; });
     $('btnAddCargo').addEventListener('click', function () {
       var name = $('nfName').value.trim() || ('货物 ' + (S.cargos.length + 1));
       var c = {
@@ -740,8 +741,8 @@
         l: +$('nfL').value || 0, w: +$('nfW').value || 0, h: +$('nfH').value || 0,
         weight: +$('nfWt').value || 0, qty: Math.max(1, Math.round(+$('nfQty').value || 1)),
         pcsPerCtn: 1,
-        stackable: $('nfStack').checked, maxLayers: +$('nfLayers').value || 0,
-        rotateMode: $('nfRot').value, color: $('nfColor').value, note: '',
+        stackable: true, maxLayers: 0, topLoad:null,
+        rotateMode:'upright', color: $('nfColor').value, note: '',
         pending: !(+$('nfL').value > 0 && +$('nfW').value > 0 && +$('nfH').value > 0)
       };
       if (c.pending) { toast('长宽高必须大于 0', 'err'); return; }
@@ -780,7 +781,7 @@
           if (!d.cargos) throw new Error('文件格式不正确');
           S.cargos = d.cargos; S.groups=d.groups||[];S.draft=d.draft||null;S.settings=d.settings||S.settings;S.title=d.name||d.title||S.title;
           if(d.schemaVersion===2){
-            PlannerCore.checkProject(d);S.ctnSpecs=d.settings.containers.map(function(c){return {spec:ContainerLib.byId(c.type),qty:c.qty};});$('rgSupport').value=d.settings.minSupport*100;$('labSup').textContent=$('rgSupport').value+'%';$('inMaxCtn').value=d.settings.maxContainers;$('ckMulti').checked=d.settings.autoAdd;$('ckSameKind').checked=!!d.settings.sameKindFirst;
+            PlannerCore.checkProject(d);S.ctnSpecs=d.settings.containers.map(function(c){return {spec:ContainerLib.byId(c.type),qty:c.qty};});
           } else if (d.ctnSpecs && d.ctnSpecs.length) {
             S.ctnSpecs = d.ctnSpecs;
           } else if (d.spec) {

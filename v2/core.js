@@ -55,7 +55,7 @@
     }return area;
   }
   function validate(bs, settings={}, bounds=null, opts={}) {
-    const cfg={...DEFAULTS,...settings},issues=[],support=new Map(),depth=new Map(),load=new Map();
+    const cfg={...DEFAULTS,...settings},issues=[],support=new Map(),depth=new Map(),load=new Map(),unknownLoad=new Set();
     const add=(severity,code,b,message)=>issues.push({severity,code,uid:b?.uid,message});
     for(let i=0;i<bs.length;i++) {
       const b=bs[i],label=b.name+' ['+b.uid+']';
@@ -91,10 +91,15 @@
       if(b.maxLayers>0&&d>b.maxLayers)add('error','layers',b,b.name+' 上方堆叠超出 '+b.maxLayers+' 层限制（含自身）');
       if(finite(b.topLoad)&&b.topLoad>=0&&(above>b.topLoad+EPS||(b.topLoad===0&&d>1)))add('error','topLoad',b,b.topLoad===0?b.name+' 设置为不允许承压（上压重量为 0 kg）':b.name+' 承受上方累计重量 '+above.toFixed(1)+' kg，超过承重值');
       const below=support.get(b.uid)||[],sum=below.reduce((s,r)=>s+r.area,0);
-      for(const r of below){depth.set(r.b.uid,Math.max(depth.get(r.b.uid)||1,d+1));load.set(r.b.uid,(load.get(r.b.uid)||0)+(above+(known(b.weight)?b.weight:0))*r.area/sum);}
+      for(const r of below){depth.set(r.b.uid,Math.max(depth.get(r.b.uid)||1,d+1));load.set(r.b.uid,(load.get(r.b.uid)||0)+(above+(known(b.weight)?b.weight:0))*r.area/sum);if(!known(b.weight)||unknownLoad.has(b.uid))unknownLoad.add(r.b.uid);}
     }
     if(bs.some(b=>!known(b.weight)))add('warning','weightUnknown',null,'有箱子未填写重量：载重、轻重关系与承重校验不完整');
-    if(bs.some(b=>b.z>EPS)&&bs.some(b=>(support.get(b.uid)||[]).length)&&bs.some(b=>!finite(b.topLoad)&&b.stackable!==false))add('warning','capacityUnknown',null,'未填写允许上压重量的箱子，实际承压能力需生产确认');
+    const missingCapacity=new Map();
+    for(const b of bs)if((depth.get(b.uid)||1)>1&&!finite(b.topLoad)&&b.stackable!==false){
+      const entry=missingCapacity.get(b.id)||{uid:b.uid,cargoId:b.id,name:b.name,uids:[],knownLoad:0,hasUnknownLoad:false};
+      entry.uids.push(b.uid);entry.knownLoad=Math.max(entry.knownLoad,load.get(b.uid)||0);entry.hasUnknownLoad ||=unknownLoad.has(b.uid);missingCapacity.set(b.id,entry);
+    }
+    for(const e of missingCapacity.values())issues.push({...e,severity:'warning',code:'capacityUnknown',message:e.name+'：正在承托上箱，允许上压重量未填写（已知上方重量最大 '+e.knownLoad.toFixed(1)+' kg'+(e.hasUnknownLoad?'，另有重量待填':'')+'）。可在“项目与叠箱规则 → 箱型规则”补填；留空表示待确认。'});
     const weight=bs.reduce((s,b)=>s+(known(b.weight)?b.weight:0),0);
     if(bounds&&weight>bounds.maxWeight+EPS)add('error','payload',null,'已知货物重量超过柜型载重');
     return {ok:!issues.some(i=>i.severity==='error'),issues,supportRatios:bs.map(b=>({uid:b.uid,ratio:b.z<=EPS?1:unionArea((support.get(b.uid)||[]).map(r=>intersection(b,r.b)))/(b.dx*b.dy)})),weight,volume:volume(bs)};
@@ -115,7 +120,7 @@
       return {...b,x:e.W-b.y-b.dy,y:b.x,dx:b.dy,dy:b.dx,orientation};
     });
   }
-  function fingerprint(p){return JSON.stringify({engineVersion:"2.2.0",cargos:p.cargos,groups:p.groups,settings:p.settings});}
+  function fingerprint(p){return JSON.stringify({engineVersion:"2.3.0",cargos:p.cargos,groups:p.groups,settings:p.settings});}
   function checkProject(p) {
     if(p.schemaVersion!==2||!Array.isArray(p.cargos)||!Array.isArray(p.groups)||!p.settings)throw Error('请选择 v2 项目文件');
     if(p.cargos.some(c=>!c.id||!c.name||!['none','upright','free'].includes(c.rotateMode)))throw Error('货物字段不完整');
