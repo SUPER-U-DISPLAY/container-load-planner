@@ -183,7 +183,7 @@
           '<input class="mini-input" data-f="h" value="' + c.h + '"></div></td>' +
         '<td class="num"><input class="mini-input" data-f="qty" value="' + c.qty + '"></td>' +
         '<td class="num"><input class="mini-input" data-f="weight" value="' + (c.weight==null?'':c.weight) + '"></td>' +
-        '<td style="text-align:center"><button class="cargo-rule-link" data-act="rules" title="在项目与叠箱规则中修改">' + (c.stackable!==false?'可叠':'禁压') + '</button></td>' +
+        '<td style="text-align:center"><button class="cargo-rule-link" data-act="rules" title="在项目与叠箱规则中修改">' + (c.stackable!==false&&c.topLoad!==0&&c.maxLayers!==1?'可叠':'禁压') + '</button></td>' +
         '<td><button class="cargo-rule-link" data-act="rules" title="在项目与叠箱规则中修改">' + ROT_LABEL[c.rotateMode] + '</button></td>' +
         '<td class="foot-td" title="姿态示意：高亮面 = 贴柜底（底面）">' + boxSVG(c) + '</td>' +
         '<td style="text-align:center"><button class="btn xs danger" data-act="del">×</button></td>' +
