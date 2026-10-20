@@ -9,7 +9,12 @@
     '20GP': {L:5898,W:2352,H:2393,maxWeight:28080},
     '40GP': {L:12032,W:2352,H:2393,maxWeight:26700},
     '40HQ': {L:12032,W:2352,H:2698,maxWeight:26460},
-    '45HQ': {L:13556,W:2352,H:2698,maxWeight:27600}
+    '45HQ': {L:13556,W:2352,H:2698,maxWeight:27600},
+    '20HQ': {L:5898,W:2352,H:2698,maxWeight:28000},
+    '53HQ': {L:16154,W:2500,H:2695,maxWeight:30000},
+    '20RF': {L:5449,W:2290,H:2244,maxWeight:27400},
+    '40RH': {L:11577,W:2286,H:2249,maxWeight:29520},
+    'LCL': {L:1200,W:1000,H:1800,maxWeight:1000}
   };
   const DEFAULTS = {standardHeight:2570,minSupport:1,overhang:0,heavyBelow:true,autoAdd:true,maxContainers:12,doorW:null,doorH:null,manualMaxWeight:25,containers:[{type:'40HQ',qty:1}]};
   const clone = x => JSON.parse(JSON.stringify(x));
@@ -84,7 +89,7 @@
     for(const b of [...bs].sort((a,b)=>b.z-a.z)) {
       const d=depth.get(b.uid)||1,above=load.get(b.uid)||0;
       if(b.maxLayers>0&&d>b.maxLayers)add('error','layers',b,b.name+' 上方堆叠超出 '+b.maxLayers+' 层限制（含自身）');
-      if(finite(b.topLoad)&&b.topLoad>=0&&above>b.topLoad+EPS)add('error','topLoad',b,b.name+' 承受上方累计重量 '+above.toFixed(1)+' kg，超过承重值');
+      if(finite(b.topLoad)&&b.topLoad>=0&&(above>b.topLoad+EPS||(b.topLoad===0&&d>1)))add('error','topLoad',b,b.name+' 承受上方累计重量 '+above.toFixed(1)+' kg，超过承重值');
       const below=support.get(b.uid)||[],sum=below.reduce((s,r)=>s+r.area,0);
       for(const r of below){depth.set(r.b.uid,Math.max(depth.get(r.b.uid)||1,d+1));load.set(r.b.uid,(load.get(r.b.uid)||0)+(above+(known(b.weight)?b.weight:0))*r.area/sum);}
     }
@@ -110,15 +115,19 @@
       return {...b,x:e.W-b.y-b.dy,y:b.x,dx:b.dy,dy:b.dx,orientation};
     });
   }
-  function fingerprint(p){return JSON.stringify({engineVersion:"2.0.1",cargos:p.cargos,groups:p.groups,settings:p.settings});}
+  function fingerprint(p){return JSON.stringify({engineVersion:"2.2.0",cargos:p.cargos,groups:p.groups,settings:p.settings});}
   function checkProject(p) {
     if(p.schemaVersion!==2||!Array.isArray(p.cargos)||!Array.isArray(p.groups)||!p.settings)throw Error('请选择 v2 项目文件');
     if(p.cargos.some(c=>!c.id||!c.name||!['none','upright','free'].includes(c.rotateMode)))throw Error('货物字段不完整');
     const units=expand(p.cargos),seen=new Set(),cfg={...DEFAULTS,...p.settings};
-    if(!finite(cfg.standardHeight)||cfg.standardHeight<=0||!finite(cfg.minSupport)||cfg.minSupport<0.75||cfg.minSupport>1||!finite(cfg.overhang)||cfg.overhang<0||cfg.overhang>100||!Number.isInteger(cfg.maxContainers)||cfg.maxContainers<1||cfg.maxContainers>30)throw Error('规则参数超出允许范围');
-    if(!cfg.containers.length||cfg.containers.some(c=>!SPECS[c.type]||!Number.isInteger(c.qty)||c.qty<1||c.qty>30)||cfg.containers.reduce((s,c)=>s+c.qty,0)>30)throw Error('柜型或柜数无效（最多 30 柜）');
+    if(!finite(cfg.standardHeight)||cfg.standardHeight<=0||!finite(cfg.minSupport)||cfg.minSupport<0.75||cfg.minSupport>1||!finite(cfg.overhang)||cfg.overhang<0||cfg.overhang>100||!Number.isInteger(cfg.maxContainers)||cfg.maxContainers<1||cfg.maxContainers>60)throw Error('规则参数超出允许范围');
+    if(!cfg.containers.length||cfg.containers.some(c=>!SPECS[c.type]||!Number.isInteger(c.qty)||c.qty<1||c.qty>60)||cfg.containers.reduce((s,c)=>s+c.qty,0)>60)throw Error('柜型或柜数无效（最多 60 柜）');
     if(new Set(p.groups.map(g=>g.id)).size!==p.groups.length)throw Error('组合 ID 重复');
     for(const g of p.groups){if(!g.id||!g.children.length)throw Error('空组合无效');for(const b of groupBoxes(g,units)){if(seen.has(b.uid))throw Error('同一箱子重复加入组合：'+b.uid);seen.add(b.uid);}}
+    if(p.draft?.children?.length){
+      const draftSeen=new Set(),occupied=new Set(p.groups.filter(g=>g.id!==p.draft.id).flatMap(g=>g.children.map(c=>c.uid)));
+      for(const b of groupBoxes(p.draft,units)){if(draftSeen.has(b.uid)||occupied.has(b.uid))throw Error('草稿重复占用箱子：'+b.uid);draftSeen.add(b.uid);}
+    }
     return units;
   }
   function makeItems(project) {
@@ -162,7 +171,8 @@
         const test=validate([...ct.boxes,...bs],cfg,ct.spec,{manual});
         if(!test.ok)continue;
         // Fill deep sections first; higher completed stacks stay towards the closed end.
-        const score=p.x*1e7+p.z*1e3+p.y+(ct.spec.H-e.H)*0.01;
+        const sameSupport=cfg.sameKindFirst&&!item.group&&bs.some(b=>ct.boxes.some(a=>a.id===b.id&&Math.abs(a.z+a.dz-b.z)<EPS&&intersection(b,a)));
+        const score=p.x*1e7+p.z*1e3+p.y+(ct.spec.H-e.H)*0.01-(sameSupport?1e9:0);
         candidates.push({block,bs,score,vi});
       }
     }
