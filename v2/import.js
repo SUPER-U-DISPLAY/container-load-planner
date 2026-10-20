@@ -2,7 +2,7 @@
   'use strict';
   const norm=v=>String(v??'').replace(/[\s\r\n（）()_.：:]/g,'').toLowerCase();
   const numeric=v=>v===null||v===undefined||String(v).trim()===''?null:Number(String(v).replace(/,/g,'').trim());
-  const fields={name:['品名','中文品名','货物名称','名称','descriptionchinese','productname','name'],nameEn:['英文品名','descriptionenglish'],ctnNo:['箱号','ctnno','cartonno'],qty:['箱数','数量','件数','包装数量箱','包装数量','packageqtyctn','packageqty','ctns','qty','quantity'],weight:['单箱重量kg','单箱重量','单箱毛重','毛重kgs/ctn','毛重','grossweightkgs/ctn','grossweight','weightkg','weight'],totalWeight:['总毛重','totalgrossweight'],l:['长','长度','长mm','长度mm','length','lengthmm','l','lmm'],w:['宽','宽度','宽mm','宽度mm','width','widthmm','w','wmm'],h:['高','高度','高mm','高度mm','height','heightmm','h','hmm'],rotateMode:['摆放方向','旋转方式','rotatemode'],stackable:['允许承叠','可堆叠','stackable'],maxLayers:['最大层数','maxlayers'],topLoad:['上压重量kg','上压重量','允许上压重量','topload'],note:['备注','remark','note','箱内配件备注','itemscontainedinctn']};
+  const fields={name:['品名','中文品名','货物名称','名称','descriptionchinese','productname','name'],nameEn:['英文品名','descriptionenglish'],ctnNo:['箱号','ctnno','cartonno'],qty:['数量箱','箱数','数量','件数','包装数量箱','包装数量','packageqtyctn','packageqty','ctns','qty','quantity'],weight:['单箱毛重kg','重量','重量kg','单箱重量kg','单箱重量','单箱毛重','毛重kgs/ctn','毛重','grossweightkgs/ctn','grossweight','weightkg','weight'],totalWeight:['总毛重','totalgrossweight'],l:['长','长度','长mm','长度mm','length','lengthmm','l','lmm'],w:['宽','宽度','宽mm','宽度mm','width','widthmm','w','wmm'],h:['高','高度','高mm','高度mm','height','heightmm','h','hmm'],rotateMode:['摆放方向','旋转方式','rotatemode'],stackable:['允许承叠','可堆叠','stackable'],maxLayers:['最大层数','maxlayers'],topLoad:['上压重量kg','上压重量','允许上压重量','topload'],note:['备注','remark','note','箱内配件备注','itemscontainedinctn']};
   function locate(grid){
     const map={};let header=-1;
     for(let r=0;r<Math.min(grid.length,25);r++){
@@ -35,7 +35,7 @@
       const v=['l','w','h'].map((k,j)=>dims[j]>0?Math.round(dims[j]*scale):0);
       if(v.some(n=>!n))rowWarnings.push('缺尺寸，保留为待补全货物');
       const rot=String(get(row,'rotateMode')??'').trim(),sk=String(get(row,'stackable')??'').trim();
-      const cargo={id:'imp-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),name,ctnNo:String(get(row,'ctnNo')??''),l:v[0],w:v[1],h:v[2],qty,weight,rotateMode:['free','自由','任意翻转'].includes(rot)?'free':['none','固定','不可旋转'].includes(rot)?'none':'upright',stackable:!['false','否','不允许','不可堆叠','0'].includes(sk),maxLayers:Math.max(0,Math.floor(numeric(get(row,'maxLayers'))||0)),topLoad:numeric(get(row,'topLoad')),note:String(get(row,'note')??''),source:sheet+'!'+(i+1),color:PlannerCore.COLORS[rows.length%PlannerCore.COLORS.length]};
+      const cargo={id:'imp-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),name,nameEn:String(get(row,'nameEn')??''),pcsPerCtn:1,ctnNo:String(get(row,'ctnNo')??''),l:v[0],w:v[1],h:v[2],qty,weight,rotateMode:['free','自由','任意','任意翻转'].includes(rot)?'free':['none','固定','不可旋转'].includes(rot)?'none':'upright',stackable:!['false','否','不允许','不可堆叠','0'].includes(sk),maxLayers:Math.max(0,Math.floor(numeric(get(row,'maxLayers'))||0)),topLoad:numeric(get(row,'topLoad')),note:String(get(row,'note')??''),source:sheet+'!'+(i+1),color:PlannerCore.COLORS[rows.length%PlannerCore.COLORS.length]};
       rows.push({cargo,warnings:rowWarnings,source:cargo.source});warnings.push(...rowWarnings.map(w=>'第 '+(i+1)+' 行：'+w));
     }return {sheet,rows,warnings};
   }

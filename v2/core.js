@@ -89,7 +89,7 @@
     for(const b of [...bs].sort((a,b)=>b.z-a.z)) {
       const d=depth.get(b.uid)||1,above=load.get(b.uid)||0;
       if(b.maxLayers>0&&d>b.maxLayers)add('error','layers',b,b.name+' 上方堆叠超出 '+b.maxLayers+' 层限制（含自身）');
-      if(finite(b.topLoad)&&b.topLoad>=0&&(above>b.topLoad+EPS||(b.topLoad===0&&d>1)))add('error','topLoad',b,b.name+' 承受上方累计重量 '+above.toFixed(1)+' kg，超过承重值');
+      if(finite(b.topLoad)&&b.topLoad>=0&&(above>b.topLoad+EPS||(b.topLoad===0&&d>1)))add('error','topLoad',b,b.topLoad===0?b.name+' 设置为不允许承压（上压重量为 0 kg）':b.name+' 承受上方累计重量 '+above.toFixed(1)+' kg，超过承重值');
       const below=support.get(b.uid)||[],sum=below.reduce((s,r)=>s+r.area,0);
       for(const r of below){depth.set(r.b.uid,Math.max(depth.get(r.b.uid)||1,d+1));load.set(r.b.uid,(load.get(r.b.uid)||0)+(above+(known(b.weight)?b.weight:0))*r.area/sum);}
     }

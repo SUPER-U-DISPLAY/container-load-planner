@@ -54,7 +54,7 @@
   document.querySelectorAll('[data-copy]').forEach(el=>el.onclick=()=>guard(()=>copyGroup(el.dataset.copy)));
   document.querySelectorAll('[data-dissolve]').forEach(el=>el.onclick=()=>guard(()=>{const g=p.groups.find(g=>g.id===el.dataset.dissolve);dialog('解散 '+g.name,'这组 '+g.children.length+' 只箱子将恢复为散箱，继续参加自动排柜。',[{label:'取消',run:close},{label:'解散组合',primary:true,run:()=>{p.groups=p.groups.filter(x=>x.id!==g.id);if(draft.id===g.id)draft=fresh();p.result=null;selected=null;history=[];persist();close();render();toast('组合已解散，数量已归还');}}]);}));
  }
- function render(){ $('projectTitle').textContent=p.name;renderCatalog();renderWorkbench();renderGroups(); }
+ function render(){ $('projectTitle').textContent=p.name;renderCatalog();renderWorkbench();renderGroups();feedback(draft.children.length?'拖动箱子调整位置，完成后保存组合':'从左侧拖入第一只底箱',null); }
  function saveStack(){
   if(readError){toast(readError);return false;}const bs=boxes(),v=C.validate(bs,p.settings);if(!bs.length||!v.ok){toast(bs.length?v.issues.find(i=>i.severity==='error').message:'请先加入箱子');return false;}
   const g={...C.clone(draft),name:draft.name.trim()||'未命名组合',children:C.normalize(draft.children,units())};const next={...p,groups:[...p.groups.filter(x=>x.id!==g.id),g],draft:g};try{C.checkProject(next);B.write(next);}catch(e){toast('保存失败：'+e.message);return false;}

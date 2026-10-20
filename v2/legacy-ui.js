@@ -505,19 +505,19 @@
     loading(true, '正在解析文件…');
     fr.onload = function () {
       try {
-        var res = Importer.parseArrayBuffer(fr.result, {});
+        var res = PlannerImportBridge.parse(fr.result);
         if (!res.cargos.length) {
           loading(false);
           toast('未识别到货物数据，请检查表格是否含「长/宽/高」或「Packing Size」列', 'err');
           return;
         }
         S.cargos = res.cargos; S.groups = []; S.draft = null; S.result = null;
-        if (res.title) S.title = res.title;
+        S.title = res.title || file.name.replace(/\.[^.]+$/, '');
         renderCargoTable();
         loading(false);
         toast('导入成功：' + res.cargos.length + ' 条货物记录' + (res.title ? '（' + res.title + '）' : ''), 'ok');
         if (res.warnings.length) {
-          modal('导入提醒', '<div class="warn-box">以下记录缺少尺寸信息，需手动补填后才会参与装柜计算：</div><ul style="margin:10px 0 0 0;padding-left:20px;line-height:1.9;font-size:12.5px">' +
+          modal('导入提醒', '<div class="warn-box">请核对以下导入提示；尺寸缺失的箱子会保留在未装入清单中：</div><ul style="margin:10px 0 0 0;padding-left:20px;line-height:1.9;font-size:12.5px">' +
             res.warnings.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul>', [{ t: '知道了', cls: 'primary' }]);
         }
         save();

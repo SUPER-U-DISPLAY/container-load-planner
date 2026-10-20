@@ -27,7 +27,7 @@
    if(this.floor){this.scene.remove(this.floor);disposeObject(this.floor);}
    const e=C.extent(this.boxes);this.bed={L:Math.max(2.8,e.L*MM+.5),W:Math.max(2.5,e.W*MM+.5)};const s=Math.max(this.bed.L,this.bed.W);
    this.floor=new T.Group();const grid=new T.GridHelper(s,Math.max(5,Math.round(s/.25)),0xc0cddd,0xdce4ee);grid.position.set(s/2,-.004,s/2);this.floor.add(grid);
-   const axes=new T.BufferGeometry().setFromPoints([new T.Vector3(0,0,0),new T.Vector3(s,0,0),new T.Vector3(0,0,0),new T.Vector3(0,0,s)]);this.floor.add(new T.LineSegments(axes,new T.LineBasicMaterial({color:'#8ba4c3'})));this.scene.add(this.floor);
+   const axes=new T.BufferGeometry().setFromPoints([new T.Vector3(0,0,0),new T.Vector3(s,0,0),new T.Vector3(0,0,0),new T.Vector3(0,0,s)]);const axisLines=new T.LineSegments(axes,new T.LineBasicMaterial({color:'#8ba4c3'}));axisLines.userData.floorLine=true;this.floor.add(axisLines);this.scene.add(this.floor);
   }
   makeLabels(){this.labels.replaceChildren();this.labelNodes=this.boxes.map(b=>{const n=document.createElement('span');n.className='scene-label'+(b.uid===this.selected?' selected':'');n.textContent=b.name+' · '+(b.ctnNo||'箱')+' '+b.index;n.dataset.uid=b.uid;this.labels.append(n);return {b,n};});}
   resize(){const r=this.canvas.parentElement.getBoundingClientRect();this.w=Math.max(1,r.width);this.h=Math.max(1,r.height);this.renderer.setSize(this.w,this.h,false);this.camera.aspect=this.w/this.h;this.camera.updateProjectionMatrix();this.render();}
