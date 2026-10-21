@@ -30,7 +30,7 @@
    state.identity={id:'browser',name:'本机试用',roles:['admin','planner','policy_manager']};
    const feedback=await all('feedback:local:'),statuses=await all('case-status:');
    state.cases=(await all('case:local:')).map(c=>{
-    const f=feedback.filter(f=>f.caseId===c.id),bad=f.some(f=>f.type==='arrival'&&['moved','crushed','broken','other_damage'].includes(f.outcome)),status=statuses.filter(s=>s.caseId===c.id).at(-1);
+    const f=feedback.filter(f=>f.caseId===c.id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)),bad=f.some(f=>f.type==='arrival'&&['moved','crushed','broken','other_damage'].includes(f.outcome)),status=statuses.filter(s=>s.caseId===c.id).sort((a,b)=>a.at.localeCompare(b.at)).at(-1);
     return {...c,feedback:f,executed:f.some(f=>f.type==='execution'),arrival:f.filter(f=>f.type==='arrival').at(-1)?.outcome||'unknown',excluded:bad||status?.excluded===true,exclusionReason:bad?'到货记录含移位或货损':status?.reason||''};
    }).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
    const active=await get('active-policy:local');state.policy=active?await get('policy:local:'+active):null;
@@ -171,7 +171,17 @@
  async function importArchive(value){
   if(config.api)throw Error('历史归档先在本机导入核对，共享确认版本请通过确认功能提交');
   if(value.schema!=='superu-learning-archive-v1'||!Array.isArray(value.cases))throw Error('经验归档格式不正确');
-  let imported=0;for(const source of value.cases){if(!source.final?.project||!source.final?.result)continue;const record=E.makeCase({id:uuid(),projectId:source.projectId||source.final.project.id,baseline:null,final:source.final,reason:source.reason||'',demo:source.demo===true});record.imported=true;record.baselineNote='归档导入，仅用于案例和模板，不伪造原始推荐';if(state.cases.some(c=>c.sampleKey===record.sampleKey))continue;await put('case:local:'+record.id,record);await put('project:'+record.final.project.id,record.final.project);imported++;}await refresh();return imported;
+  const seen=new Set(state.cases.map(c=>c.sampleKey));let imported=0;
+  for(const source of value.cases){
+   if(!source.final?.project||!source.final?.result)continue;
+   const record=E.makeCase({id:uuid(),projectId:source.projectId||source.final.project.id,baseline:null,final:source.final,reason:source.reason||'',demo:source.demo===true});record.imported=true;record.baselineNote='归档导入，仅用于案例和模板，不伪造原始推荐';if(seen.has(record.sampleKey))continue;
+   await put('case:local:'+record.id,record);await put('project:'+record.final.project.id,record.final.project);seen.add(record.sampleKey);
+   const feedback=Array.isArray(source.feedback)?source.feedback:[],damage=['moved','crushed','broken','other_damage'];
+   for(const old of feedback){if(!['reason','execution','arrival'].includes(old.type))continue;const f={id:uuid(),caseId:record.id,type:old.type,outcome:old.outcome||null,reason:String(old.reason||''),fixingMeasures:String(old.fixingMeasures||''),createdAt:old.createdAt||new Date().toISOString(),actorName:'归档导入',attachmentIds:[],imported:true};await put('feedback:local:'+f.id,f);}
+   if(source.excluded===true||damage.includes(source.arrival)||feedback.some(f=>f.type==='arrival'&&damage.includes(f.outcome)))await put('case-status:'+uuid(),{caseId:record.id,excluded:true,reason:source.exclusionReason||'归档中已停用或含货损记录',at:new Date().toISOString()});
+   imported++;
+  }
+  await refresh();return imported;
  }
  window.PlannerLearning={ready:initialized,state,uuid,get config(){return {...config};},get,put,all,observe,noteRecommendation,refresh,request,flush,compute,cancelJob,saveResult,commitResult,currentResult,confirm,syncPending,connection,projects,openProject,cases,feedback,photo,policies,train,activate,exclude,exportArchive,importArchive};
  window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===parent&&event.data?.type==='planner:auth')connection(event.data.api||'/api/load-planner',event.data.token).catch(issue);});
