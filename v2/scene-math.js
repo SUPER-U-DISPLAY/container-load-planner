@@ -15,7 +15,7 @@
    x=near(x,[0,...atLevel.flatMap(b=>[b.x,b.x+b.dx-d[0],b.x+(b.dx-d[0])/2,b.x+b.dx,b.x-d[0]])]);
    y=near(y,[0,...atLevel.flatMap(b=>[b.y,b.y+b.dy-d[1],b.y+(b.dy-d[1])/2,b.y+b.dy,b.y-d[1]])]);
   }
-  return {uid:unit.uid,x:Math.max(0,Math.round(x)),y:Math.max(0,Math.round(y)),z:Math.round(z),orientation};
+  return {uid:unit.uid,...(unit.manualOrientation?{manualOrientation:true}:{}),x:Math.max(0,Math.round(x)),y:Math.max(0,Math.round(y)),z:Math.round(z),orientation};
  }
  function assess(unit,pos,boxes,settings){const next=C.box(unit,pos);return {box:next,...C.validate([...boxes,next],settings)};}
  const api={placement,assess};if(typeof module==='object')module.exports=api;else root.PlannerDrag=api;

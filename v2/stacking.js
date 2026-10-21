@@ -63,10 +63,12 @@
     const next=C.clone(project);next.groups=[...(proposal.replace?[]:next.groups),...C.clone(proposal.groups)];next.draft=proposal.groups.length?C.clone(proposal.groups[0]):null;delete next.result;C.checkProject(next);
     const all=C.expand(next.cargos);for(const g of proposal.groups)if(!C.validate(C.groupBoxes(g,all),next.settings).ok)throw Error('自动组合不符合当前规则，请重新生成');return next;
   }
-  function rotatePlacement(unit,pos,axis,boxes,settings){
+  function rotatePlacement(unit,pos,axis,boxes,settings,{manual=false}={}){
+    const manualOrientation=unit.manualOrientation===true||pos.manualOrientation===true||(manual&&axis!=='z'&&unit.rotateMode==='upright');
+    if(manualOrientation)unit={...unit,manualOrientation:true};
     const current=C.box(unit,pos),target=axis==='x'?[current.dx,current.dz,current.dy]:axis==='y'?[current.dz,current.dy,current.dx]:[current.dy,current.dx,current.dz],orientation=C.poses(unit).findIndex(d=>d.every((v,k)=>Math.abs(v-target[k])<C.EPS));
     if(orientation<0)return {ok:false,restricted:true,message:'这个箱型当前'+(unit.rotateMode==='none'?'固定朝向':'仅允许水平旋转')+'。在“项目与叠箱规则 → 箱型规则”中可设置允许平放、侧放、立放。'};
-    const next={...pos,orientation,x:Math.max(0,current.x+(current.dx-target[0])/2),y:Math.max(0,current.y+(current.dy-target[1])/2)};
+    const next={...pos,orientation,...(manualOrientation?{manualOrientation:true}:{}),x:Math.max(0,current.x+(current.dx-target[0])/2),y:Math.max(0,current.y+(current.dy-target[1])/2)};
     const check=C.validate([...boxes.filter(b=>b.uid!==unit.uid),C.box(unit,next)],settings);
     return {...check,position:next,message:check.issues.find(i=>i.severity==='error')?.message};
   }

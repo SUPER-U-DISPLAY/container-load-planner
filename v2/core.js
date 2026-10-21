@@ -23,7 +23,7 @@
   function poses(c) {
     const {l,w,h} = c;
     const a = [[l,w,h],[w,l,h],[l,h,w],[h,l,w],[w,h,l],[h,w,l]];
-    return a.slice(0,c.rotateMode === 'none' ? 1 : c.rotateMode === 'free' ? 6 : 2);
+    return a.slice(0,c.rotateMode === 'none' ? 1 : c.rotateMode === 'free' || c.manualOrientation === true ? 6 : 2);
   }
   function expand(cargos) {
     const out=[];
@@ -37,8 +37,9 @@
   }
   function box(u, p={}) {
     const orientation = p.orientation ?? 0;
-    const d = poses(u)[orientation] || [NaN,NaN,NaN];
-    return {...u,x:p.x??0,y:p.y??0,z:p.z??0,dx:d[0],dy:d[1],dz:d[2],orientation};
+    const unit={...u};if((p.manualOrientation??u.manualOrientation)===true&&u.rotateMode!=='none')unit.manualOrientation=true;else delete unit.manualOrientation;
+    const d = poses(unit)[orientation] || [NaN,NaN,NaN];
+    return {...unit,x:p.x??0,y:p.y??0,z:p.z??0,dx:d[0],dy:d[1],dz:d[2],orientation};
   }
   function extent(bs) {return {L:Math.max(0,...bs.map(b=>b.x+b.dx)),W:Math.max(0,...bs.map(b=>b.y+b.dy)),H:Math.max(0,...bs.map(b=>b.z+b.dz))};}
   function volume(bs){return bs.reduce((s,b)=>s+b.dx*b.dy*b.dz/1e9,0);}
@@ -84,6 +85,17 @@
         if(cfg.heavyBelow&&known(b.weight)&&known(a.weight)&&b.weight*rects[i].area/sum>a.weight+EPS)add('error','heavyAbove',b,label+' 分担重量大于下方箱子，请调整重箱在下');
       });
     }
+    // A saved composite owns its entire floor footprint while packing. Its
+    // children may stack internally; other items cannot occupy space above it.
+    if(bounds||opts.packing){
+      const composites=new Map();
+      for(const b of bs)if(b.groupId){if(!composites.has(b.groupId))composites.set(b.groupId,[]);composites.get(b.groupId).push(b);}
+      for(const [id,members] of composites){
+        const minX=Math.min(...members.map(b=>b.x)),minY=Math.min(...members.map(b=>b.y)),minZ=Math.min(...members.map(b=>b.z)),e=extent(members),footprint={x:minX,y:minY,dx:e.L-minX,dy:e.W-minY},name=members[0].groupName||id;
+        if(minZ>EPS)add('error','groupFloor',members[0],'组合“'+name+'”必须直接放在柜底');
+        for(const b of bs)if(b.groupId!==id&&intersection(footprint,b))add('error','groupIsolation',b,'组合“'+name+'”独占柜底位置，上方不再安排其他货物');
+      }
+    }
     // Traverse from the highest boxes down: maxLayers on EVERY supporting box,
     // plus accumulated top load transferred proportionally to contact area.
     for(const b of [...bs].sort((a,b)=>b.z-a.z)) {
@@ -120,7 +132,7 @@
       return {...b,x:e.W-b.y-b.dy,y:b.x,dx:b.dy,dy:b.dx,orientation};
     });
   }
-  function fingerprint(p){return JSON.stringify({engineVersion:"2.3.0",cargos:p.cargos,groups:p.groups,settings:p.settings});}
+  function fingerprint(p){return JSON.stringify({engineVersion:"2.3.2",cargos:p.cargos,groups:p.groups,settings:p.settings});}
   function checkProject(p) {
     if(p.schemaVersion!==2||!Array.isArray(p.cargos)||!Array.isArray(p.groups)||!p.settings)throw Error('请选择 v2 项目文件');
     if(p.cargos.some(c=>!c.id||!c.name||!['none','upright','free'].includes(c.rotateMode)))throw Error('货物字段不完整');
@@ -157,10 +169,10 @@
     const points=[{x:0,y:0,z:0}];
     for(const a of ct.blocks){
       points.push({x:a.x+a.dx,y:a.y,z:0},{x:a.x,y:a.y+a.dy,z:0},{x:a.x+a.dx,y:0,z:0},{x:0,y:a.y+a.dy,z:0});
-      if(!item.group)points.push({x:a.x,y:a.y,z:a.z+a.dz});
+      if(!item.group&&!a.group)points.push({x:a.x,y:a.y,z:a.z+a.dz});
     }
-    // Top surfaces inside a composite have true geometry. Its envelope is still reserved.
-    if(!item.group)for(const a of ct.boxes)if(a.z+a.dz>EPS)points.push({x:a.x,y:a.y,z:a.z+a.dz});
+    // Only loose cartons provide surfaces for further automatic stacking.
+    if(!item.group)for(const a of ct.boxes)if(!a.groupId&&a.z+a.dz>EPS)points.push({x:a.x,y:a.y,z:a.z+a.dz});
     const unique=[...new Map(points.map(p=>[[p.x,p.y,p.z].join(','),p])).values()];
     unique.sort((a,b)=>a.x-b.x||a.z-b.z||a.y-b.y);
     for(let vi=0;vi<item.variants.length;vi++) {
@@ -169,7 +181,8 @@
       if(cfg.doorW&&e.W>cfg.doorW+EPS)continue;
       if(!manual&&cfg.doorH&&e.H>cfg.doorH+EPS)continue;
       for(const p of unique.slice(0,1500)) {
-        const block={...p,dx:e.L,dy:e.W,dz:e.H,id:item.id};
+        const block={...p,dx:e.L,dy:e.W,dz:e.H,id:item.id,group:item.group};
+        if(item.group&&p.z>EPS||ct.blocks.some(a=>(a.group||item.group)&&intersection(a,block)))continue;
         if(p.x+e.L>ct.spec.L+EPS||p.y+e.W>ct.spec.W+EPS||p.z+e.H>height+EPS||ct.blocks.some(a=>overlap(a,block)))continue;
         if(ct.weight+item.weight>ct.spec.maxWeight+EPS)continue;
         const bs=raw.map(b=>({...b,x:b.x+p.x,y:b.y+p.y,z:b.z+p.z,blockId:item.id,manual:manual&&b.z+p.z+b.dz>cfg.standardHeight}));
@@ -228,7 +241,7 @@
       onProgress({step:i+1,total:limit,loaded:input.units.length-left.reduce((s,t)=>s+t.count,0)-input.unpacked.length});
       if(!r.ct.boxes.length&&i>=queue.length-1)break;
     }
-    for(const it of left)for(const b of it.variants[0])input.unpacked.push({uid:b.uid,name:b.name,reason:it.group?'组合无法整组放入：检查柜型、柜门、剩余位置或叠箱规则':'当前柜型/剩余空间/支撑或重量规则不满足；可增加柜型或调整摆放'});
+    for(const it of left)for(const b of it.variants[0])input.unpacked.push({uid:b.uid,name:b.name,reason:it.group?'组合只能整组放在柜底：检查柜型、柜门、独立底面空间或叠箱规则':(project.groups.length?'组合上方禁止加箱；当前独立空间、支撑或重量规则不满足，可增加柜型或调整组合':'当前柜型/剩余空间/支撑或重量规则不满足；可增加柜型或调整摆放')});
     const result={signature:fingerprint(project),containers,unpacked:input.unpacked,total:input.units.length,loaded:containers.reduce((s,c)=>s+c.boxes.length,0),createdAt:new Date().toISOString()};
     result.audit=audit(project,result);
     // Offer a separate alternative ONLY when <=2 known light loose cartons eliminate a whole last container.
@@ -244,10 +257,12 @@
   }
   function audit(project,result) {
     const units=expand(project.cargos),expected=new Set(units.map(u=>u.uid)),unitMap=new Map(units.map(u=>[u.uid,u])),seen=new Set(),issues=[];
+    const approvedManual=new Set(project.groups.flatMap(g=>g.children.filter(c=>c.manualOrientation===true).map(c=>c.uid)));
     const actual=result.containers.flatMap(c=>c.boxes).concat(result.unpacked);
     for(const b of actual){if(!expected.has(b.uid))issues.push('出现未知箱号 '+b.uid);if(seen.has(b.uid))issues.push('重复箱号 '+b.uid);seen.add(b.uid);}
     for(const u of units)if(!seen.has(u.uid))issues.push('丢失箱号 '+u.uid);
     for(const ct of result.containers){
+      for(const b of ct.boxes)if(Boolean(b.manualOrientation)!==approvedManual.has(b.uid))issues.push('手动朝向与保存的组合不一致：'+b.uid);
       for(const b of ct.boxes){const u=unitMap.get(b.uid);if(u&&['l','w','h','weight','stackable','maxLayers','topLoad','rotateMode'].some(k=>(u[k]??null)!==(b[k]??null)))issues.push('箱子属性与原始清单不一致：'+b.uid);}
       for(const b of ct.boxes)if(ct.boxes.some(a=>a.uid!==b.uid&&Math.abs(a.z+a.dz-b.z)<EPS&&intersection(b,a)&&a.seq>=b.seq))issues.push('上箱装入顺序早于支撑箱：'+b.uid);
       const v=validate(ct.boxes,project.settings,ct.spec,{manual:ct.boxes.some(b=>b.manual)});issues.push(...v.issues.filter(i=>i.severity==='error').map(i=>i.message));

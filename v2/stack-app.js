@@ -9,7 +9,7 @@
  try{C.groupBoxes(draft,C.expand(p.cargos));}catch(e){readError='叠箱草稿引用的箱子不存在，请先导出备份并检查项目。';draft=fresh();p.draft=draft;}
  const scene=new StackScene($('stack3dCanvas'),{onSelect:uid=>{selected=uid;renderWorkbench();},onDrop:(unit,pos,existing)=>{
   if(!existing&&!available(unit.id).some(u=>u.uid===unit.uid)){toast('这只箱子已被使用，请重新选择。');return;}
-  change(()=>{if(existing)draft.children=draft.children.map(c=>c.uid===unit.uid?pos:c);else draft.children.push(pos);selected=unit.uid;});feedback('已放置 '+unit.name+' · 离地 '+pos.z+' mm',true);
+  change(()=>{if(existing)draft.children=draft.children.map(c=>c.uid===unit.uid?{...c,...pos}:c);else draft.children.push(pos);selected=unit.uid;});feedback('已放置 '+unit.name+' · 离地 '+pos.z+' mm',true);
  },onFeedback:feedback});
  $('renderMode').textContent=scene.renderer.isSoftwareRenderer?'兼容 3D 模式':'';
  function units(){return C.expand(p.cargos);}
@@ -39,8 +39,8 @@
   $('draftState').textContent=B.dirty({...p,draft})?'草稿 · 未保存组合':saved?'已保存':'新组合';$('draftState').className='stack-tag'+(B.dirty({...p,draft})?' warn':'');
   $('sceneEmpty').style.display=bs.length?'none':'';$('undo3d').disabled=!history.length;$('clear3d').disabled=!bs.length;
   $('selected3d').textContent=b?b.name+' · 第 '+b.index+' 箱 · '+b.dx+' × '+b.dy+' × '+b.dz+' mm':'点击模型选择箱子';
-  $('rotate3d').disabled=!b;$('flip3d').disabled=!b;$('rotateSide3d').disabled=!b;$('remove3d').disabled=!b;
-  $('orientationHint').innerHTML=b?'朝向规则：'+esc(PlannerRules.rotationLabel(b.rotateMode))+' <button id="selectedRuleLink">修改此箱型规则</button>':'选中箱子后，可水平转、前后翻、左右翻，每次 90°。';if($('selectedRuleLink'))$('selectedRuleLink').onclick=()=>toolsDialog(b.id);
+  $('rotate3d').disabled=!b||b.rotateMode==='none';$('flip3d').disabled=!b||b.rotateMode==='none';$('rotateSide3d').disabled=!b||b.rotateMode==='none';$('remove3d').disabled=!b;
+  $('orientationHint').innerHTML=b?(b.manualOrientation?'当前箱已手动翻转':'箱型自动朝向：'+esc(PlannerRules.rotationLabel(b.rotateMode)))+' <button id="selectedRuleLink">修改此箱型规则</button>':'选中箱子后，可水平转、前后翻、左右翻，每次 90°。';if($('selectedRuleLink'))$('selectedRuleLink').onclick=()=>toolsDialog(b.id);
   ['alignStart3d','alignWidth3d','placeFloor3d'].forEach(id=>$(id).disabled=!b);
   for(const a of ['X','Y','Z']){$('coord'+a).value=b?b[a.toLowerCase()]:'';$('coord'+a).disabled=!b;}$('applyCoords').disabled=!b;
   $('currentMembers').innerHTML=[...bs].sort((a,b)=>a.z-b.z||a.x-b.x||a.y-b.y).map(b=>'<button class="member-chip '+(b.uid===selected?'selected':'')+'" data-select="'+esc(b.uid)+'">'+(b.z===0?'底层':'高 '+b.z+' mm')+' · '+esc(b.name)+' #'+b.index+'</button>').join('');
@@ -65,10 +65,10 @@
  function copyGroup(groupId){const g=p.groups.find(g=>g.id===groupId),all=units(),used=new Set(p.groups.flatMap(g=>g.children.map(c=>c.uid))),byUid=new Map(all.map(u=>[u.uid,u]));const children=[];for(const pos of g.children){const source=byUid.get(pos.uid),next=all.find(u=>u.id===source.id&&!used.has(u.uid));if(!next){toast(source.name+' 的剩余数量不够复制这一组');return;}used.add(next.uid);children.push({...pos,uid:next.uid});}const copy={...C.clone(g),id:id(),name:g.name+'（副本）',children};p.groups.push(copy);draft=C.clone(copy);p.result=null;selected=null;history=[];persist();render();scene.fit();toast('已复制一组，使用新的实箱数量');}
  function changeOrientation(axis){
   const b=boxes().find(b=>b.uid===selected),pos=draft.children.find(c=>c.uid===selected);if(!b)return;
-  const result=S.rotatePlacement(b,pos,axis,boxes(),p.settings);
-  if(result.restricted){toast('此箱型的朝向有限制，请在箱型规则中修改');toolsDialog(b.id);return;}
+  const result=S.rotatePlacement(b,pos,axis,boxes(),p.settings,{manual:true});
+  if(result.restricted){feedback('此箱型已设为固定朝向，不能直接翻转',false);toast('此箱型已设为固定朝向');return;}
   if(!result.ok){toast('无法旋转：'+result.message+'。可先移开上方或旁边的箱子。');return;}
-  change(()=>draft.children=draft.children.map(c=>c.uid===selected?result.position:c));scene.fit();feedback('已旋转，保存后用于排柜',true);
+  change(()=>draft.children=draft.children.map(c=>c.uid===selected?result.position:c));scene.fit();feedback('已翻转当前箱子，保存后保留这个朝向',true);
  }
  function applyPosition(pos){
   const children=draft.children.map(c=>c.uid===selected?{...c,...pos}:c),v=C.validate(C.groupBoxes({...draft,children},units()),p.settings);
