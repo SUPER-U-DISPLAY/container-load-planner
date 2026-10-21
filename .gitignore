@@ -1,3 +1,11 @@
 .workbuddy/
 *.xlsx
 vendor/
+node_modules/
+.env
+.env.*
+!.env.example
+data/
+test-results/
+playwright-report/
+*.log

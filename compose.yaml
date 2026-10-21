@@ -1,0 +1,39 @@
+services:
+  planner-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: load_planner
+      POSTGRES_USER: load_planner
+      POSTGRES_PASSWORD: ${PLANNER_DB_PASSWORD:?Set PLANNER_DB_PASSWORD in .env}
+    volumes:
+      - planner-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U load_planner -d load_planner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  planner:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://load_planner:${PLANNER_DB_PASSWORD}@planner-db:5432/load_planner
+      PLANNER_AUTH_MODE: erp
+      ERP_AUTH_URL: ${ERP_AUTH_URL:?Set ERP_AUTH_URL in .env}
+      PLANNER_ALLOWED_ORIGINS: ${PLANNER_ALLOWED_ORIGINS:-https://super-u-display.github.io}
+      PLANNER_ATTACHMENTS_DIR: /app/data/attachments
+      PLANNER_JOB_TIMEOUT_MS: 60000
+      PLANNER_WORKER_MEMORY_MB: 256
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - planner-files:/app/data
+    depends_on:
+      planner-db:
+        condition: service_healthy
+    mem_limit: 768m
+    cpus: 1.0
+    init: true
+    restart: unless-stopped
+volumes:
+  planner-db:
+  planner-files:
