@@ -1,5 +1,9 @@
 # 集装箱装柜排柜模拟系统
 
+学习版测试入口：[v3](https://super-u-display.github.io/container-load-planner/v3/)。支持手动叠箱、独立柜内调整、确认历史、经验组合复用和负责人发布/回退。原生产入口及 v2 保持独立；GitHub Pages 可本机试用，多人共享需部署配套服务。
+
+使用与 ERP 部署见 [学习版部署说明](docs/LEARNING_DEPLOYMENT.md)。服务运行：Node.js 24 → `npm ci` → 配置 ERP 身份接口后 `npm start`；验证使用 `npm test`。
+
 纯前端、零后端、可离线的集装箱装箱排柜 3D 计算器。参考 SeaRates Load Calculator。
 
 ## 功能

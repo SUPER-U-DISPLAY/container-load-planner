@@ -1,0 +1,21 @@
+{
+  "name": "superu-container-load-planner",
+  "version": "3.0.0",
+  "private": true,
+  "description": "SUPER U container planning, manual editing and experience learning",
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "scripts": {
+    "start": "node server/index.cjs",
+    "test": "node --test v2/tests/*.test.cjs v3/tests/*.test.cjs server/tests/*.test.cjs",
+    "test:learning": "node --test v3/tests/learning*.test.cjs server/tests/*.test.cjs",
+    "test:browser": "node scripts/browser-smoke.cjs"
+  },
+  "dependencies": {
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}
