@@ -43,6 +43,7 @@
   limits(project,containers);
   const unpacked=input.unpacked.map(b=>{const u=byUid.get(b.uid);if(!u)fail('未装入清单出现未知箱号');return {uid:u.uid,name:u.name,reason:b.reason||'人工暂存为未装入'};});
   const result={signature:C.fingerprint(project),containers,unpacked,total:units.length,loaded:containers.reduce((n,c)=>n+c.boxes.length,0),createdAt:input.createdAt||new Date().toISOString(),locks:[...new Set(input.locks||[])]};
+  result.transport=C.Transport.overview(containers);
   result.audit=C.audit(project,result);
   if(!result.audit.ok)fail(result.audit.issues[0]);
   const existing=new Set(containers.flatMap(ct=>ct.boxes.map(key)));

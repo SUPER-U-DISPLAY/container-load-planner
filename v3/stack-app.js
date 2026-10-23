@@ -35,6 +35,7 @@
  function safeColor(s){return /^#[0-9a-fA-F]{3,8}$/.test(s||'')?s:'#739dbd';}
  function renderWorkbench(){
   const bs=boxes(),b=bs.find(b=>b.uid===selected),v=C.validate(bs,p.settings),saved=p.groups.some(g=>g.id===draft.id);
+  v.issues.push(...C.Transport.warnings(C.Transport.screen(bs)));
   if(document.activeElement!==$('stackName'))$('stackName').value=draft.name;
   $('draftState').textContent=B.dirty({...p,draft})?'草稿 · 未保存组合':saved?'已保存':'新组合';$('draftState').className='stack-tag'+(B.dirty({...p,draft})?' warn':'');
   $('sceneEmpty').style.display=bs.length?'none':'';$('undo3d').disabled=!history.length;$('clear3d').disabled=!bs.length;
@@ -91,6 +92,8 @@
   await PlannerLearning.ready;
   const proposal=PlannerExperience.combine({...p,draft:null},PlannerLearning.state,{replace}),all=units();proposal.signature=C.fingerprint(p);
   const warnings=[...new Set(proposal.groups.flatMap(g=>C.validate(C.groupBoxes(g,all),p.settings).issues.filter(i=>i.severity==='warning').map(i=>i.message)))];
+  const pendingSecuring=proposal.groups.reduce((n,g)=>n+C.Transport.screen(C.groupBoxes(g,all)).needsSecuring,0);
+  if(pendingSecuring)warnings.unshift(pendingSecuring+' 箱仍需防倾倒加固确认。采用组合仅保存相对位置；装柜和装卸时仍需落实侧挡、支架或绑扎，未确认的布局不会自动用于经验学习。');
   dialog('一键组合 · 先看方案，再调整',
     (p.groups.length?'<div class="auto-options"><button class="btn sm '+(!replace?'active':'')+'" id="autoRemaining">只组合剩余散箱</button><button class="btn sm '+(replace?'active':'')+'" id="autoReplace">重新组合全部</button></div>':'')+
     '<div class="auto-summary"><span>新组合 <b>'+proposal.groups.length+'</b> 组</span><span>本次组合 <b>'+proposal.combined+'</b> 箱</span><span>剩余散箱 <b>'+proposal.loose+'</b> 箱</span></div>'+
