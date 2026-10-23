@@ -1,4 +1,4 @@
-importScripts('core.js?v=2.0.1');
+importScripts('transport.js?v=3.1.0','core.js?v=3.1.0');
 self.onmessage = ({data}) => {
   try {
     if(data.action==='recommend') {

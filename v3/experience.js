@@ -2,11 +2,11 @@
 (function(root){
  'use strict';
  const node=typeof module==='object',C=node?require('./core.js'):root.PlannerCore,S=node?require('./stacking.js'):root.PlannerStack,P=node?require('./layout.js'):root.PlannerLayout;
- const VERSION='3.0.0';
+ const VERSION='3.1.0';
  const stable=v=>JSON.stringify(order(v));
  function order(v){if(Array.isArray(v))return v.map(order);if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>[k,order(v[k])]));return v;}
  function hash(v){const s=typeof v==='string'?v:stable(v);let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16).padStart(8,'0')+'-'+s.length;}
- function typeKey(c){return stable({profile:c.packageCode||c.profileId||String(c.name||'').trim().toLowerCase(),version:c.packageVersion||'unversioned',l:c.l,w:c.w,h:c.h,weight:C.known(c.weight)?c.weight:null,rotateMode:c.rotateMode,stackable:c.stackable!==false,maxLayers:c.maxLayers||0,topLoad:c.topLoad??null});}
+ function typeKey(c){return stable({profile:c.packageCode||c.profileId||String(c.name||'').trim().toLowerCase(),version:c.packageVersion||'unversioned',packageType:c.packageType||'auto',l:c.l,w:c.w,h:c.h,weight:C.known(c.weight)?c.weight:null,rotateMode:c.rotateMode,stackable:c.stackable!==false,maxLayers:c.maxLayers||0,topLoad:c.topLoad??null});}
  function inputKey(project){
   const cfg={...C.DEFAULTS,...project.settings};delete cfg.sameKindFirst;delete cfg.positionMode;delete cfg.preference;
   return stable({cargos:project.cargos.map(c=>({id:c.id,type:typeKey(c),qty:c.qty})).sort((a,b)=>a.id.localeCompare(b.id)),settings:cfg});
@@ -14,7 +14,11 @@
  function comparable(a,b){return inputKey(a)===inputKey(b);}
  function layoutKey(result){return stable({containers:result.containers.map(ct=>({type:ct.spec.id,boxes:ct.boxes.map(b=>({uid:b.uid,x:b.x,y:b.y,z:b.z,orientation:b.orientation,groupId:b.groupId||null})).sort((a,b)=>a.uid.localeCompare(b.uid))})),unpacked:result.unpacked.map(b=>b.uid).sort()});}
  function groupKey(group,units){const byUid=new Map(units.map(u=>[u.uid,u]));return stable({allowRotate:group.allowRotate!==false,children:C.normalize(group.children,units).map(pos=>({type:typeKey(byUid.get(pos.uid)),x:pos.x,y:pos.y,z:pos.z,orientation:pos.orientation,manual:!!pos.manualOrientation})).sort((a,b)=>stable(a).localeCompare(stable(b)))});}
- function eligible(record){return record?.kind==='confirmed'&&!record.excluded&&!record.demo&&record.final?.project&&record.final?.result;}
+ function eligible(record){
+  if(record?.kind!=='confirmed'||record.excluded||record.demo||!record.final?.project||!record.final?.result)return false;
+  // Recheck old cases too. Editing metadata must never erase a current risk.
+  try{const result=P.canonical(record.final.project,record.final.result,{keepEmpty:false});return result.transport.needsSecuring===0;}catch{return false;}
+ }
  function templateLibrary(cases){
   const map=new Map();
   for(const record of cases.filter(eligible)){
@@ -91,7 +95,7 @@
   }
   const weights=ctx.policy?.enabled?ctx.policy.weights:{};
   for(const c of candidates)c.score=preferenceScore(project,c.result,weights);
-  candidates.sort((a,b)=>b.result.loaded-a.result.loaded||a.result.containers.length-b.result.containers.length||b.score-a.score||(a.source==='历史确认方案'?-1:0)-(b.source==='历史确认方案'?-1:0));
+  candidates.sort((a,b)=>C.Transport.compare(a.result,b.result)||b.score-a.score||(a.source==='历史确认方案'?-1:0)-(b.source==='历史确认方案'?-1:0));
   const best=candidates[0];best.result.learning={source:best.source,caseId:best.caseId||null,policyVersion:ctx.policy?.id||'base',candidates:candidates.map(c=>({source:c.source,loaded:c.result.loaded,containers:c.result.containers.length,preferenceScore:c.score})),transportOutcome:'unknown'};
   return best.result;
  }
@@ -110,7 +114,8 @@
    try{const p=C.clone(baseline.project);p.draft=null;before={project:p,result:P.canonical(p,baseline.result,{keepEmpty:false})};baselineNote='相同输入与限制';}catch{baselineNote='原始推荐不完整，仅用于案例和模板';}
   }else if(baseline)baselineNote='输入或限制已变化，不作为偏好对';
   const finalValue={project,result},diff=differences(before,finalValue);
-  return {id,projectId:projectId||project.id,familyId:project.context?.erpProjectId||project.context?.learningFamilyId||projectId||project.id,kind:'confirmed',createdAt:new Date().toISOString(),engineVersion:VERSION,evidence:'confirmed',arrival:'unknown',demo:!!demo,reason:String(reason||'').slice(0,2000),baseline:before,baselineNote,final:finalValue,diff,events:C.clone(events).slice(-500),sampleKey:stable({projectId:projectId||project.id,input:inputKey(project),layout:layoutKey(result),groups:project.groups.map(g=>groupKey(g,C.expand(project.cargos))).sort()}),rankingEligible:!!before&&!demo&&result.unpacked.length===0&&before.result.unpacked.length===0&&layoutKey(before.result)!==layoutKey(result),inferredReason:null};
+  const transportPending=result.transport.needsSecuring>0;
+  return {id,projectId:projectId||project.id,familyId:project.context?.erpProjectId||project.context?.learningFamilyId||projectId||project.id,kind:'confirmed',createdAt:new Date().toISOString(),engineVersion:VERSION,evidence:'confirmed',transportPending,arrival:'unknown',demo:!!demo,reason:String(reason||'').slice(0,2000),baseline:before,baselineNote,final:finalValue,diff,events:C.clone(events).slice(-500),sampleKey:stable({projectId:projectId||project.id,input:inputKey(project),layout:layoutKey(result),groups:project.groups.map(g=>groupKey(g,C.expand(project.cargos))).sort()}),rankingEligible:!!before&&!demo&&!transportPending&&result.unpacked.length===0&&before.result.unpacked.length===0&&layoutKey(before.result)!==layoutKey(result),inferredReason:null};
  }
  function train(cases){
   const records=cases.filter(r=>eligible(r)&&r.rankingEligible&&r.baseline&&comparable(r.baseline.project,r.final.project)),byProject=new Map();
