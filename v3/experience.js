@@ -2,7 +2,7 @@
 (function(root){
  'use strict';
  const node=typeof module==='object',C=node?require('./core.js'):root.PlannerCore,S=node?require('./stacking.js'):root.PlannerStack,P=node?require('./layout.js'):root.PlannerLayout;
- const VERSION='3.1.0';
+ const VERSION='3.2.0';
  const stable=v=>JSON.stringify(order(v));
  function order(v){if(Array.isArray(v))return v.map(order);if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>[k,order(v[k])]));return v;}
  function hash(v){const s=typeof v==='string'?v:stable(v);let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16).padStart(8,'0')+'-'+s.length;}
@@ -24,7 +24,7 @@
   for(const record of cases.filter(eligible)){
    const p=record.final.project,units=C.expand(p.cargos),byUid=new Map(units.map(u=>[u.uid,u]));
    for(const g of p.groups){
-    if(g.children.length<2||!C.validate(C.groupBoxes(g,units),p.settings).ok)continue;
+    if(g.children.length<2||!C.validatePlacement(C.groupBoxes(g,units),p.settings).ok)continue;
     const children=C.normalize(g.children,units).map(pos=>{const u=byUid.get(pos.uid),b=C.box(u,pos);return {type:typeKey(u),x:pos.x,y:pos.y,z:pos.z,dx:b.dx,dy:b.dy,dz:b.dz};});
     const k=stable({children:[...children].sort((a,b)=>stable(a).localeCompare(stable(b))),allowRotate:g.allowRotate!==false});
     if(!map.has(k))map.set(k,{id:'template-'+hash(k),key:k,name:'历史确认组合',children,allowRotate:g.allowRotate!==false,sources:[],projects:new Set()});
@@ -53,7 +53,7 @@
     }
     if(!valid)break;
     const group={id:'learned-'+hash([t.id,children.map(c=>c.uid)]),name:'经验组合 '+(original.length+historical.length+1),source:'experience',templateId:t.id,evidenceProjects:t.projectCount||0,allowRotate:project.settings.allowGroupRotate!==false&&t.allowRotate!==false&&children.every(pos=>all.find(u=>u.uid===pos.uid).rotateMode!=='none'),children};
-    try{if(!C.validate(C.groupBoxes(group,all),project.settings).ok){skipped++;break;}}catch{skipped++;break;}
+    try{if(!C.validatePlacement(C.groupBoxes(group,all),project.settings).ok){skipped++;break;}}catch{skipped++;break;}
     historical.push(group);local.forEach(uid=>used.add(uid));
    }
   }

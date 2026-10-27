@@ -4,7 +4,7 @@
  const C=typeof module==='object'?require('./core.js'):root.PlannerCore;
  const KEY='super-u-learning-v3';
  const newId=()=>globalThis.crypto.randomUUID();
- function empty(){return {schemaVersion:2,appVersion:'3.1.0',id:newId(),context:{},demo:false,name:'未命名装柜方案',cargos:[],groups:[],settings:C.clone(C.DEFAULTS),draft:null};}
+ function empty(){return {schemaVersion:2,appVersion:'3.2.0',id:newId(),context:{},demo:false,name:'未命名装柜方案',cargos:[],groups:[],settings:C.clone(C.DEFAULTS),draft:null};}
  function cleanCargo(c){const n=C.clone(c);delete n._placedDim;delete n.manualOrientation;return {...n,id:String(c.id),name:c.name||'未命名货物',l:+c.l||0,w:+c.w||0,h:+c.h||0,qty:+c.qty,weight:C.known(+c.weight)?+c.weight:null,rotateMode:c.rotateMode||'upright',stackable:c.stackable!==false,maxLayers:+c.maxLayers||0,topLoad:c.topLoad===null||c.topLoad===undefined||c.topLoad===''?null:+c.topLoad};}
  function fromLegacy(state,opt={}){
    if(!state.id)state.id=newId();
@@ -17,8 +17,8 @@
    return p;
  }
  function dirty(p){const d=p.draft;if(!d)return false;const g=p.groups.find(g=>g.id===d.id);if(!g)return !!d.children?.length;return JSON.stringify(g.children)!==JSON.stringify(d.children)||g.name!==d.name||g.allowRotate!==d.allowRotate;}
- function read(){const raw=localStorage.getItem(KEY)||localStorage.getItem('super-u-prestack-v2');if(!raw)return empty();const p=JSON.parse(raw);C.checkProject(p);return {...p,id:p.id||newId(),context:p.context||{},appVersion:'3.1.0',settings:{...C.DEFAULTS,...p.settings}};}
- function write(p,options={}){C.checkProject(p);p.id=p.id||newId();p.context=p.context||{};p.appVersion='3.1.0';localStorage.setItem(KEY,JSON.stringify(p));root.PlannerLearning?.observe(p,options.action||'stack-edit').catch(()=>{});}
+ function read(){const raw=localStorage.getItem(KEY)||localStorage.getItem('super-u-prestack-v2');if(!raw)return empty();const p=JSON.parse(raw);C.checkProject(p);return {...p,id:p.id||newId(),context:p.context||{},appVersion:'3.2.0',settings:{...C.DEFAULTS,...p.settings}};}
+ function write(p,options={}){C.checkProject(p);p.id=p.id||newId();p.context=p.context||{};p.appVersion='3.2.0';localStorage.setItem(KEY,JSON.stringify(p));root.PlannerLearning?.observe(p,options.action||'stack-edit').catch(()=>{});}
  function toLegacy(p,r){
    if(!r.audit.ok)throw Error('排柜结果校验失败：'+r.audit.issues[0]);
    const units=C.expand(p.cargos),map=new Map(units.map(u=>[u.uid,u]));

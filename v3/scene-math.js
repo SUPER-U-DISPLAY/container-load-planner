@@ -17,6 +17,6 @@
   }
   return {uid:unit.uid,...(unit.manualOrientation?{manualOrientation:true}:{}),x:Math.max(0,Math.round(x)),y:Math.max(0,Math.round(y)),z:Math.round(z),orientation};
  }
- function assess(unit,pos,boxes,settings){const next=C.box(unit,pos);return {box:next,...C.validate([...boxes,next],settings)};}
+ function assess(unit,pos,boxes,settings){const next=C.box(unit,pos);return {box:next,...C.validatePlacement([...boxes,next],settings)};}
  const api={placement,assess};if(typeof module==='object')module.exports=api;else root.PlannerDrag=api;
 })(typeof window!=='undefined'?window:globalThis);

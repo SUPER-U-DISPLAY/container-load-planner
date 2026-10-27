@@ -8,9 +8,9 @@ const p=(cargos,groups=[],settings={})=>({schemaVersion:2,name:'Regression',carg
 const b=(c,pos={})=>C.box({...c,uid:c.id+'#1',index:1},pos);
 const has=(v,code)=>v.issues.some(i=>i.code===code);
 test('一托二：两个上箱共同匹配大底箱，保存后整组放入且箱数守恒',()=>{
- const a=cargo('base',1200,1000,1100,{weight:80}),u=cargo('upper',600,1000,650,{weight:18,qty:2});
- const g={id:'g',name:'一托二',children:[{uid:'base#1',x:0,y:0,z:0,orientation:0},{uid:'upper#1',x:0,y:0,z:1100,orientation:0},{uid:'upper#2',x:600,y:0,z:1100,orientation:0}]};
- const project=p([a,u],[g]),r=C.pack(project);assert.equal(r.loaded,3);assert.equal(r.unpacked.length,0);assert.equal(r.containers[0].blocks.length,1);assert.equal(r.audit.ok,true);assert.equal(r.containers[0].volume,2.1);
+ const a=cargo('base',1200,1000,600,{weight:80}),u=cargo('upper',600,1000,300,{weight:18,qty:2});
+ const g={id:'g',name:'一托二',children:[{uid:'base#1',x:0,y:0,z:0,orientation:0},{uid:'upper#1',x:0,y:0,z:600,orientation:0},{uid:'upper#2',x:600,y:0,z:600,orientation:0}]};
+ const project=p([a,u],[g]),r=C.pack(project);assert.equal(r.loaded,3);assert.equal(r.unpacked.length,0);assert.equal(r.containers[0].blocks.length,1);assert.equal(r.audit.ok,true);assert.ok(Math.abs(r.containers[0].volume-1.08)<1e-9);
 });
 test('二托一：同高底箱联合支撑；不同高会被拒绝',()=>{
  const a=b(cargo('a',600,1000,1000)),d=b(cargo('d',600,1000,1000),{x:600}),top=b(cargo('top',1200,1000,500,{weight:10}),{z:1000});
@@ -53,10 +53,10 @@ test('禁止同一个箱子在多个组合中重复使用',()=>{
  const child={uid:'a#1',x:0,y:0,z:0,orientation:0};assert.throws(()=>C.pack(p([cargo('a')],[{id:'g1',children:[child]},{id:'g2',children:[child]}])),/重复/);
 });
 test('组合真实体积不包含外包空隙',()=>{
- const cs=[cargo('a'),cargo('b',500,1000,500,{weight:10})],g={id:'g',name:'g',children:[{uid:'a#1',x:0,y:0,z:0,orientation:0},{uid:'b#1',x:0,y:0,z:1000,orientation:0}]};const r=C.pack(p(cs,[g]));assert.equal(r.containers[0].volume,1.25);assert.equal(r.containers[0].blocks[0].dz,1500);
+ const cs=[cargo('a'),cargo('b',500,1000,500,{weight:10})],g={id:'g',name:'g',children:[{uid:'a#1',x:0,y:0,z:0,orientation:0},{uid:'b#1',x:250,y:0,z:1000,orientation:0}]};const r=C.pack(p(cs,[g]));assert.equal(r.containers[0].volume,1.25);assert.equal(r.containers[0].blocks[0].dz,1500);
 });
 test('自动同底面组合不会漏箱、重复或超高',()=>{
- const project=p([cargo('a',1200,1000,800,{qty:9,weight:50})]);project.groups=C.autoGroup(project);assert.equal(project.groups.length,3);assert.equal(new Set(project.groups.flatMap(g=>g.children.map(b=>b.uid))).size,9);const r=C.pack(project);assert.equal(r.loaded,9);assert.equal(r.audit.ok,true);
+ const project=p([cargo('a',1200,1000,400,{qty:9,weight:50})]);project.groups=C.autoGroup(project);assert.equal(project.groups.length,3);assert.equal(new Set(project.groups.flatMap(g=>g.children.map(b=>b.uid))).size,9);const r=C.pack(project);assert.equal(r.loaded,9);assert.equal(r.audit.ok,true);
 });
 test('整组旋转正确转换子箱坐标，不允许旋转的子箱禁止组旋转',()=>{
  const cs=[cargo('a',1000,2400,1000,{weight:80}),cargo('b',500,2400,500,{weight:10})],g={id:'g',name:'g',children:[{uid:'a#1',x:0,y:0,z:0,orientation:0},{uid:'b#1',x:0,y:0,z:1000,orientation:0}]};let r=C.pack(p(cs,[g]));assert.equal(r.loaded,2);assert.equal(r.audit.ok,true);cs[0].rotateMode='none';r=C.pack(p(cs,[g]));assert.equal(r.loaded,0);assert.equal(r.unpacked.length,2);
