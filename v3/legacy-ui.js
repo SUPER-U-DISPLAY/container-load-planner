@@ -365,7 +365,7 @@
   function renderStat(ct) {
     var st = ct.stats, sp = ct.spec;
     var lv = st.cogLevel;
-    var lvTxt = { ok: '良好', warn: '偏移偏大', danger: '严重偏移' }[lv];
+    var lvTxt = { ok: '重心居中', warn: '偏移偏大', danger: '严重偏移' }[lv];
     $('statBox').innerHTML =
       '<div class="kv"><span class="k">装入件数</span><span class="v">' + st.count + ' 箱</span></div>' +
       '<div class="kv"><span class="k">装载体积</span><span class="v">' + fmt(st.volumeUsedCbm, 3) + ' / ' + fmt(st.volumeTotalCbm, 2) + ' cbm</span></div>' +
@@ -378,7 +378,7 @@
       '<div class="kv"><span class="k">占用长 / 高</span><span class="v">' + Math.round(st.usedLength) + ' / ' + Math.round(st.usedHeight) + ' mm</span></div>' +
       '<div class="kv"><span class="k">重心 X/Y/Z</span><span class="v">' + Math.round(st.cog.x) + '/' + Math.round(st.cog.y) + '/' + Math.round(st.cog.z) + '</span></div>' +
       '<div class="kv"><span class="k">重心评估</span><span class="v"><span class="tag ' + lv + '">' + lvTxt + '</span></span></div>' +
-      '<div class="hint" style="margin-top:5px">纵向偏移 ' + (st.cogDevX * 100).toFixed(1) + '%，横向偏移 ' + (st.cogDevY * 100).toFixed(1) + '%（相对柜中心；一般建议 ±5% 内）</div>' +
+      '<div class="hint" style="margin-top:5px">纵向偏移 ' + (st.cogDevX * 100).toFixed(1) + '%，横向偏移 ' + (st.cogDevY * 100).toFixed(1) + '%（相对柜中心；一般建议 ±5% 内；仅评估整柜重心，不代表单件防倒）</div>' +
       (st.overweight ? '<div class="err-box" style="margin-top:7px">⚠ 该柜超载，请拆分货物</div>' : '') +
       '<div class="hint" style="margin-top:5px">排序策略：' + esc(ct.strategy || '-') + '</div>';
   }
@@ -594,7 +594,7 @@
     $('ruleSummary').textContent=PlannerRules.summary(S.settings);
     var details=S.result&&S.result.warningDetails||[],capacities=details.filter(function(w){return w.code==='capacityUnknown';}),names=Array.from(new Set(capacities.map(function(w){return w.name;}))),risks=details.filter(function(w){return w.code==='tippingRisk';}),riskCount=risks.reduce(function(n,w){return n+w.uids.length;},0),other=details.some(function(w){return w.code==='weightUnknown';}),balance=details.some(function(w){return w.code==='balance';}),notice=$('ruleNotice');
     notice.hidden=!names.length&&!other&&!riskCount&&!balance;
-    notice.innerHTML=(riskCount?'<b>'+riskCount+' 箱需防倾倒加固确认</b><div>窄高件、上叠货物及侧挡候选已复核。点击货物查看具体方向；邻货接触不代表已固定，装卸时也需临时支撑。</div>':'')+(names.length?'<div>承压资料待确认：'+names.slice(0,5).map(esc).join('、')+(names.length>5?'等 '+names.length+' 类箱型':'')+'。</div>':'')+(other?'<div>部分单箱重量未填写，请在货物清单中补充。</div>':'')+(balance?'<div>部分柜的重心偏移超过一般建议范围，请调整并按实称重量复核。</div>':'')+(!notice.hidden?'<button class="btn xs" id="completeCapacity">查看项目与箱型规则</button>':'');
+    notice.innerHTML=(riskCount?'<b>'+riskCount+' 箱需防倾倒加固确认</b><div>无约束高叠已作为放入限制。以下落地窄高件仍需独立固定，点击货物查看具体方向；邻货接触不代表已固定。</div>':'')+(names.length?'<div>承压资料待确认：'+names.slice(0,5).map(esc).join('、')+(names.length>5?'等 '+names.length+' 类箱型':'')+'。</div>':'')+(other?'<div>部分单箱重量未填写，请在货物清单中补充。</div>':'')+(balance?'<div>部分柜的重心偏移超过一般建议范围，请调整并按实称重量复核。</div>':'')+(!notice.hidden?'<button class="btn xs" id="completeCapacity">查看项目与箱型规则</button>':'');
     var btn=$('completeCapacity');if(btn)btn.onclick=function(){openRules(null,names.length?'cargo':'common');};
   }
   function openRules(cargoId,tab){stopPlay();PlannerRules.open({

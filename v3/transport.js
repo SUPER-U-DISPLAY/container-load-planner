@@ -5,7 +5,7 @@
    for blocking: unknown wall/package strength never becomes verified safety. */
 (function(root){
  'use strict';
- const VERSION='3.1.0',EPS=.01,ACCEL=.8;
+ const VERSION='3.2.0',EPS=.01,ACCEL=.8;
  const TYPES=['auto','ordinary','fragile','wooden','frame'];
  const known=n=>Number.isFinite(n)&&n>0;
  function fragile(c){
@@ -56,6 +56,20 @@
   for(const r of report.risks){let v=groups.get(r.cargoId);if(!v){v={severity:'warning',code:'tippingRisk',uid:r.uid,uids:[],cargoId:r.cargoId,name:r.name,needsSecuring:true,exposed:0};groups.set(r.cargoId,v);}v.uids.push(r.uid);if(r.exposed.length)v.exposed++;}
   return [...groups.values()].map(v=>({...v,message:v.name+'：'+v.uids.length+' 箱需防倾倒加固确认'+(v.exposed?'，其中 '+v.exposed+' 箱存在缺少侧挡候选的方向':'；邻货/柜壁接触仅为侧挡候选，尚未核实承力')+'。检查允许姿态、侧挡/支架、绑扎及装卸时临时支撑；当前仅为初筛，不能视为已加固。'}));
  }
+ function stackFailures(boxes,bounds=null){
+  if(!boxes.some(b=>b.z>EPS))return [];
+  const bases=new Set();
+  for(const b of boxes)if(boxes.some(a=>a.uid!==b.uid&&Math.abs(a.z-b.z-b.dz)<EPS&&area(a,b)>EPS))bases.add(b.uid);
+  const byUid=new Map(boxes.map(b=>[b.uid,b]));
+  const unknown=boxes.filter(b=>(b.z>EPS||bases.has(b.uid))&&!known(b.weight)).map(b=>({severity:'error',code:'stackWeightUnknown',uid:b.uid,uids:[b.uid],cargoId:b.id,name:b.name,message:b.name+'：叠放承载链的重量未确认，不能判断高叠重心；请补充重量，或先落地摆放。'}));
+  // Virtual grouping and mere wall/neighbour contact are not proof of a
+  // restraint. With no rated securing model, an unstable loaded support
+  // chain or upper box cannot be accepted as a normal stacking placement.
+  return unknown.concat(screen(boxes,bounds).risks.filter(r=>byUid.get(r.uid).z>EPS||bases.has(r.uid)).map(r=>({
+   severity:'error',code:'unrestrainedStack',uid:r.uid,uids:[r.uid],cargoId:r.cargoId,name:r.name,
+   message:r.name+'：无约束高叠被阻止（'+[r.weak.some(k=>k[0]==='x')?'前后':'',r.weak.some(k=>k[0]==='y')?'左右':''].filter(Boolean).join('、')+'方向存在倾倒风险）。请落地、降层或调整允许朝向；邻货/柜壁接触不能代替经过确认的侧向约束。'
+  })));
+ }
  // Cheap placement heuristic. Final screen also checks accumulated loads.
  function placementCost(placed,existing,bounds,{directional=true}={}){
   return placed.reduce((sum,b)=>{
@@ -74,6 +88,6 @@
  }
  function overview(containers){const needsSecuring=containers.reduce((n,c)=>n+(c.transport?.needsSecuring||0),0);return {version:VERSION,status:needsSecuring?'pending-securing':'screened',needsSecuring,exposed:containers.reduce((n,c)=>n+(c.transport?.exposed||0),0),basis:'几何及承载链防倾倒初筛，非运输安全或加固验收'};}
  function note(r){const axis=r.weak.some(k=>k[0]==='x')?'前后':'',side=r.weak.some(k=>k[0]==='y')?'左右':'';return '防倾倒待确认（'+[axis,side].filter(Boolean).join('、')+'方向）'+(r.exposed.length?'：存在缺少有效侧挡候选的方向，需调整姿态/位置或制定支架、止挡、绑扎方案':'：附近虽有侧挡候选，仍须核实其承力、防护及固定')+'；装卸时也需临时支撑';}
- const api={VERSION,TYPES,fragile,protectedBase,intrinsicRisk:ownRisk,screen,warnings,placementCost,compare,overview,note};
+ const api={VERSION,TYPES,fragile,protectedBase,intrinsicRisk:ownRisk,screen,warnings,stackFailures,placementCost,compare,overview,note};
  if(typeof module==='object'&&module.exports)module.exports=api;else root.PlannerTransport=api;
 })(typeof self!=='undefined'?self:globalThis);

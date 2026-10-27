@@ -87,7 +87,7 @@
   let result,jobId=null;
   if(config.api){const remote=await flush(p),job=await request('/projects/'+encodeURIComponent(p.id)+'/jobs',{method:'POST',payload:{opId:uuid(),expectedRevision:remote.revision}});jobId=job.id;state.activeJob=job.id;notify();try{result=(await poll(job.id,onProgress)).result;}finally{state.activeJob=null;notify();}}
   else result=await new Promise((resolve,reject)=>{
-   const worker=new Worker('learning-worker.js?v=3.1.0');let done=false;state.activeJob='local';state.localWorker=worker;
+   const worker=new Worker('learning-worker.js?v=3.2.0');let done=false;state.activeJob='local';state.localWorker=worker;
    const timer=setTimeout(()=>finish(Error('本机计算超时，请分批测试')),120000);
    function finish(err,value){if(done)return;done=true;clearTimeout(timer);worker.terminate();state.activeJob=null;state.localWorker=null;state.cancelLocal=null;notify();if(err)reject(err);else resolve(value);}
    state.cancelLocal=()=>finish(Error('计算已取消'));worker.onmessage=event=>{const message=event.data;if(message.progress)onProgress(message.progress);else if(message.error)finish(Error(message.error));else if(message.result)finish(null,message.result);};worker.onerror=()=>finish(Error('本机计算进程启动失败，请通过网页地址打开系统'));notify();worker.postMessage({project:p,experience:{cases:state.cases,templates:state.templates,policy:state.policy}});

@@ -1,4 +1,4 @@
-/* Super U planner v3.1 — geometry, inventory, transport screening and packing.
+/* Super U planner v3.2 — geometry, inventory, transport screening and packing.
    Millimetres / kilograms. x: deep end -> door, y: width, z: up.
    No DOM dependencies. Shared by browser, worker and node regression tests. */
 (function (root) {
@@ -122,6 +122,11 @@
     const byId=new Map(units.map(u=>[u.uid,u]));
     return g.children.map(p=>{const u=byId.get(p.uid);if(!u)throw Error('组合引用的箱子不存在：'+p.uid);return {...box(u,p),groupId:g.id,groupName:g.name};});
   }
+  function validatePlacement(bs,settings={},bounds=null,opts={}){
+    const result=validate(bs,settings,bounds,opts);
+    if(result.ok){result.issues.push(...T.stackFailures(bs,bounds));result.ok=!result.issues.some(i=>i.severity==='error');}
+    return result;
+  }
   function normalize(children,units) {
     const bs=groupBoxes({id:'draft',children},units);if(!bs.length)return children;
     const min={x:Math.min(...bs.map(b=>b.x)),y:Math.min(...bs.map(b=>b.y)),z:Math.min(...bs.map(b=>b.z))};
@@ -154,7 +159,7 @@
     const units=checkProject(project),claimed=new Set(),items=[],unpacked=[];
     for(const g of project.groups){
       const bs=groupBoxes(g,units);bs.forEach(b=>claimed.add(b.uid));
-      const v=validate(bs,project.settings);
+      const v=validatePlacement(bs,project.settings);
       if(!v.ok){bs.forEach(b=>unpacked.push({uid:b.uid,name:b.name,reason:'组合“'+g.name+'”需修正：'+v.issues.filter(i=>i.severity==='error').map(i=>i.message).join('；')}));continue;}
       const r=rotateBoxes(bs),variants=[bs];
       if(r.every(b=>b.orientation>=0&&b.rotateMode!=='none')&&g.allowRotate!==false)variants.push(r);
@@ -193,6 +198,8 @@
         const bs=raw.map(b=>({...b,x:b.x+p.x,y:b.y+p.y,z:b.z+p.z,blockId:item.id,manual:manual&&b.z+p.z+b.dz>cfg.standardHeight}));
         const test=validate([...ct.boxes,...bs],cfg,ct.spec,{manual});
         if(!test.ok)continue;
+        const changesStack=bs.some(b=>b.z>EPS||ct.boxes.some(a=>Math.abs(b.z+b.dz-a.z)<EPS&&intersection(a,b)));
+        if(changesStack&&T.stackFailures([...ct.boxes,...bs],ct.spec).length)continue;
         // Fill deep sections first; higher completed stacks stay towards the closed end.
         const sameSupport=cfg.sameKindFirst&&!item.group&&bs.some(b=>ct.boxes.some(a=>a.id===b.id&&Math.abs(a.z+a.dz-b.z)<EPS&&intersection(b,a)));
         const score=(cfg.positionMode==='low'?p.z*1e9+p.x*1e4+p.y:p.x*1e7+p.z*1e3+p.y)+(ct.spec.H-e.H)*0.01-(sameSupport?1e9:0)+(transportMode?T.placementCost(bs,ct.boxes,ct.spec,{directional:cfg.positionMode!=='compact'})*1e12:0);
@@ -233,7 +240,7 @@
     return ordered;
   }
   function summarize(ct,cfg) {
-    const v=validate(ct.boxes,cfg,ct.spec,{manual:ct.boxes.some(b=>b.manual)});
+    const v=validatePlacement(ct.boxes,cfg,ct.spec,{manual:ct.boxes.some(b=>b.manual)});
     ct.boxes=loadingOrder(ct.boxes);ct.boxes.forEach((b,i)=>b.seq=i+1);
     ct.volume=v.volume;ct.utilization=v.volume/(ct.spec.L*ct.spec.W*ct.spec.H/1e9);ct.issues=v.issues;
     ct.unknownWeights=ct.boxes.filter(b=>!known(b.weight)).length;
@@ -266,7 +273,7 @@
           if(Math.abs(pos.x-x)<EPS&&Math.abs(pos.y-y)<EPS||pos.x<0||pos.y<0||pos.x+length>ct.spec.L+EPS||pos.y+width>ct.spec.W+EPS)continue;
           const shifted=moving.map(b=>({...b,x:b.x+pos.x-x,y:b.y+pos.y-y}));
           if(shifted.some(b=>fixed.some(a=>overlap(a,b))))continue;
-          const bs=[...fixed,...shifted];if(deviation(bs)>Math.max(.05,priorDeviation)+1e-9||!validate(bs,cfg,ct.spec).ok)continue;
+          const bs=[...fixed,...shifted];if(deviation(bs)>Math.max(.05,priorDeviation)+1e-9||!validatePlacement(bs,cfg,ct.spec).ok)continue;
           const next=T.screen(bs,ct.spec);if(next.cost>=report.cost-1e-6||best&&next.cost>=best.cost-1e-6)continue;
           best={boxes:bs,cost:next.cost,ids,dx:pos.x-x,dy:pos.y-y};
         }
@@ -288,7 +295,7 @@
     }
     for(const it of left)for(const b of it.variants[0]){
       const limit=Math.min(cfg.standardHeight,Math.max(...queue.map(s=>s.H))),minHeight=Math.min(...it.variants.map(v=>extent(v).H));
-      input.unpacked.push({uid:b.uid,name:b.name,reason:minHeight>limit+EPS?'允许朝向下最低高度 '+minHeight+' mm，超过当前可用限高 '+limit+' mm（超出 '+(minHeight-limit)+' mm）；增加同型柜不能解决，请确认包装、允许朝向及柜门条件':it.group?'组合只能整组放在柜底：检查柜型、柜门、独立底面空间或叠箱规则':(project.groups.length?'组合上方禁止加箱；':'')+'当前柜型/空间/易碎箱承压/支撑规则不满足；检查箱型规则、摆放或柜型'});
+      input.unpacked.push({uid:b.uid,name:b.name,reason:minHeight>limit+EPS?'允许朝向下最低高度 '+minHeight+' mm，超过当前可用限高 '+limit+' mm（超出 '+(minHeight-limit)+' mm）；增加同型柜不能解决，请确认包装、允许朝向及柜门条件':it.group?'组合只能整组放在柜底：检查柜型、柜门、独立底面空间或叠箱规则':(project.groups.length?'组合上方禁止加箱；':'')+'未找到满足空间、承压与防倒高叠限制的位置；不会采用无约束高叠。请检查落地/低叠空间、柜数及允许朝向'});
     }
     if(cfg.stabilityAware!==false)for(const ct of containers)repairExposure(ct,cfg);
     const result={signature:fingerprint(project),containers,unpacked:input.unpacked,total:input.units.length,loaded:containers.reduce((s,c)=>s+c.boxes.length,0),createdAt:new Date().toISOString()};
@@ -323,7 +330,7 @@
       for(const b of ct.boxes)if(Boolean(b.manualOrientation)!==approvedManual.has(b.uid))issues.push('手动朝向与保存的组合不一致：'+b.uid);
       for(const b of ct.boxes){const u=unitMap.get(b.uid);if(u&&['l','w','h','weight','stackable','maxLayers','topLoad','rotateMode','packageType'].some(k=>(u[k]??null)!==(b[k]??null)))issues.push('箱子属性与原始清单不一致：'+b.uid);}
       for(const b of ct.boxes)if(ct.boxes.some(a=>a.uid!==b.uid&&Math.abs(a.z+a.dz-b.z)<EPS&&intersection(b,a)&&a.seq>=b.seq))issues.push('上箱装入顺序早于支撑箱：'+b.uid);
-      const v=validate(ct.boxes,project.settings,ct.spec,{manual:ct.boxes.some(b=>b.manual)});issues.push(...v.issues.filter(i=>i.severity==='error').map(i=>i.message));
+      const v=validatePlacement(ct.boxes,project.settings,ct.spec,{manual:ct.boxes.some(b=>b.manual)});issues.push(...v.issues.filter(i=>i.severity==='error').map(i=>i.message));
     }
     for(const g of project.groups){
       const members=new Set(g.children.map(b=>b.uid));
@@ -347,12 +354,12 @@
         for(let o=0;o<poses(v).length;o++){
           const b=box(v,{orientation:o,z:extent(bs).H});
           if(Math.abs(b.dx-bs[0].dx)>EPS||Math.abs(b.dy-bs[0].dy)>EPS)continue;
-          if(validate([...bs,b],project.settings).ok){bs.push(b);children.push({uid:v.uid,x:0,y:0,z:b.z,orientation:o});used.add(v.uid);break;}
+          if(validatePlacement([...bs,b],project.settings).ok){bs.push(b);children.push({uid:v.uid,x:0,y:0,z:b.z,orientation:o});used.add(v.uid);break;}
         }
       }
       if(children.length>1){used.add(u.uid);groups.push({id:'auto-'+u.uid,name:'同底面组合 '+(project.groups.length+groups.length+1),allowRotate:true,children});}
     }return groups;
   }
-  const api={EPS,COLORS,SPECS,DEFAULTS,Transport:T,clone,known,poses,expand,box,extent,volume,overlap,unionArea,validate,groupBoxes,normalize,rotateBoxes,fingerprint,checkProject,makeItems,placeOne,packToSpec,pack,audit,autoGroup,loadingOrder,summarize};
+  const api={EPS,COLORS,SPECS,DEFAULTS,Transport:T,clone,known,poses,expand,box,extent,volume,overlap,unionArea,validate,validatePlacement,groupBoxes,normalize,rotateBoxes,fingerprint,checkProject,makeItems,placeOne,packToSpec,pack,audit,autoGroup,loadingOrder,summarize};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PlannerCore=api;
 })(typeof self!=='undefined'?self:globalThis);

@@ -34,7 +34,7 @@
  }
  function safeColor(s){return /^#[0-9a-fA-F]{3,8}$/.test(s||'')?s:'#739dbd';}
  function renderWorkbench(){
-  const bs=boxes(),b=bs.find(b=>b.uid===selected),v=C.validate(bs,p.settings),saved=p.groups.some(g=>g.id===draft.id);
+  const bs=boxes(),b=bs.find(b=>b.uid===selected),v=C.validatePlacement(bs,p.settings),saved=p.groups.some(g=>g.id===draft.id);
   v.issues.push(...C.Transport.warnings(C.Transport.screen(bs)));
   if(document.activeElement!==$('stackName'))$('stackName').value=draft.name;
   $('draftState').textContent=B.dirty({...p,draft})?'草稿 · 未保存组合':saved?'已保存':'新组合';$('draftState').className='stack-tag'+(B.dirty({...p,draft})?' warn':'');
@@ -51,7 +51,7 @@
   $('saveStack3d').disabled=!bs.length||!v.ok||!!readError;$('saveStack3d').textContent=saved?'保存组合修改':'保存组合';$('saveStackTop3d').disabled=$('saveStack3d').disabled;$('saveStackTop3d').textContent=saved?'保存修改':'保存组合';scene.setData(bs,selected,p.settings);
  }
  function renderGroups(){
-  $('savedCount').textContent=p.groups.length+' 组';$('savedGroups').innerHTML=p.groups.length?p.groups.map(g=>{const bs=C.groupBoxes(g,units()),v=C.validate(bs,p.settings);return '<article class="saved-group '+(g.id===draft.id?'active':'')+'" data-group="'+esc(g.id)+'"><h3>'+esc(g.name)+'<span class="stack-tag '+(!v.ok?'bad':'')+'">'+(v.ok?(g.source==='auto'?'系统组合':'手动组合'):'需修正')+'</span></h3><canvas aria-label="'+esc(g.name)+' 立体组合"></canvas><div class="saved-members">'+[...bs].sort((a,b)=>a.z-b.z).map(b=>(b.z===0?'底层':'高 '+b.z+' mm')+'：'+esc(b.name)+' #'+b.index).join('<br>')+'</div><div class="stack-actions"><button class="btn xs" data-edit="'+esc(g.id)+'">调整</button><button class="btn xs" data-copy="'+esc(g.id)+'">复制一组</button><button class="btn xs" data-dissolve="'+esc(g.id)+'">解散</button></div></article>';}).join(''):'<div class="stack-empty">保存后在这里看到每一组。<br>同一只箱子只能属于一个组合。</div>';
+  $('savedCount').textContent=p.groups.length+' 组';$('savedGroups').innerHTML=p.groups.length?p.groups.map(g=>{const bs=C.groupBoxes(g,units()),v=C.validatePlacement(bs,p.settings);return '<article class="saved-group '+(g.id===draft.id?'active':'')+'" data-group="'+esc(g.id)+'"><h3>'+esc(g.name)+'<span class="stack-tag '+(!v.ok?'bad':'')+'">'+(v.ok?(g.source==='auto'?'系统组合':'手动组合'):'需修正')+'</span></h3><canvas aria-label="'+esc(g.name)+' 立体组合"></canvas><div class="saved-members">'+[...bs].sort((a,b)=>a.z-b.z).map(b=>(b.z===0?'底层':'高 '+b.z+' mm')+'：'+esc(b.name)+' #'+b.index).join('<br>')+'</div><div class="stack-actions"><button class="btn xs" data-edit="'+esc(g.id)+'">调整</button><button class="btn xs" data-copy="'+esc(g.id)+'">复制一组</button><button class="btn xs" data-dissolve="'+esc(g.id)+'">解散</button></div></article>';}).join(''):'<div class="stack-empty">保存后在这里看到每一组。<br>同一只箱子只能属于一个组合。</div>';
   document.querySelectorAll('[data-group]').forEach(el=>{const g=p.groups.find(g=>g.id===el.dataset.group);StackScene.preview(el.querySelector('canvas'),C.groupBoxes(g,units()));});
   document.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>guard(()=>{draft=C.clone(p.groups.find(g=>g.id===el.dataset.edit));selected=draft.children[0]?.uid||null;history=[];persist();render();scene.fit();feedback('正在编辑 '+draft.name+'；修改后请保存',null);}));
   document.querySelectorAll('[data-copy]').forEach(el=>el.onclick=()=>guard(()=>copyGroup(el.dataset.copy)));
@@ -59,7 +59,7 @@
  }
  function render(){ $('projectTitle').textContent=p.name;renderCatalog();renderWorkbench();renderGroups();const saved=p.groups.reduce((n,g)=>n+g.children.length,0);$('stackOverview').textContent='已保存 '+p.groups.length+' 组 / '+saved+' 箱 · 散箱 '+(units().length-saved)+' 箱';feedback(draft.children.length?'拖动箱子调整位置，完成后保存组合':'从左侧拖入第一只底箱',null); }
  function saveStack(){
-  if(readError){toast(readError);return false;}const bs=boxes(),v=C.validate(bs,p.settings);if(!bs.length||!v.ok){toast(bs.length?v.issues.find(i=>i.severity==='error').message:'请先加入箱子');return false;}
+  if(readError){toast(readError);return false;}const bs=boxes(),v=C.validatePlacement(bs,p.settings);if(!bs.length||!v.ok){toast(bs.length?v.issues.find(i=>i.severity==='error').message:'请先加入箱子');return false;}
   const g={...C.clone(draft),name:draft.name.trim()||'未命名组合',children:C.normalize(draft.children,units())};const next={...p,groups:[...p.groups.filter(x=>x.id!==g.id),g],draft:g};try{C.checkProject(next);B.write(next);}catch(e){toast('保存失败：'+e.message);return false;}
   p=next;draft=C.clone(g);p.draft=draft;p.result=null;persist();render();scene.fit();toast('组合已保存，排柜时保持内部摆放');return true;
  }
@@ -72,7 +72,7 @@
   change(()=>draft.children=draft.children.map(c=>c.uid===selected?result.position:c));scene.fit();feedback('已翻转当前箱子，保存后保留这个朝向',true);
  }
  function applyPosition(pos){
-  const children=draft.children.map(c=>c.uid===selected?{...c,...pos}:c),v=C.validate(C.groupBoxes({...draft,children},units()),p.settings);
+  const children=draft.children.map(c=>c.uid===selected?{...c,...pos}:c),v=C.validatePlacement(C.groupBoxes({...draft,children},units()),p.settings);
   if(!v.ok){toast('位置未改变：'+v.issues.find(i=>i.severity==='error').message);return;}
   change(()=>draft.children=children);scene.fit();feedback('位置已调整，保存后用于排柜',true);
  }
@@ -81,7 +81,7 @@
  $('saveStack3d').onclick=saveStack;$('saveStackTop3d').onclick=saveStack;$('newStack').onclick=()=>guard(()=>{draft=fresh();selected=null;history=[];persist();render();scene.fit();feedback('从左侧拖入第一只底箱',null);});
  $('clear3d').onclick=()=>dialog('清空工作台','清空当前草稿。已保存的组合仍可从右侧重新打开。',[{label:'取消',run:close},{label:'清空工作台',primary:true,run:()=>{change(()=>{draft=fresh();selected=null;});close();scene.fit();feedback('工作台已清空',null);}}]);
  $('undo3d').onclick=()=>{const old=history.pop();if(!old)return;draft=old.draft;selected=old.selected;persist('undo');render();feedback('已撤销上一步',null);};$('rotate3d').onclick=()=>changeOrientation('z');$('flip3d').onclick=()=>changeOrientation('x');$('rotateSide3d').onclick=()=>changeOrientation('y');
- $('remove3d').onclick=()=>{const children=draft.children.filter(c=>c.uid!==selected),v=C.validate(C.groupBoxes({...draft,children},units()),p.settings);if(!v.ok){toast('请先移开上方箱子：'+v.issues.find(i=>i.severity==='error').message);return;}change(()=>{draft.children=children;selected=null;});};
+ $('remove3d').onclick=()=>{const children=draft.children.filter(c=>c.uid!==selected),v=C.validatePlacement(C.groupBoxes({...draft,children},units()),p.settings);if(!v.ok){toast('请先移开上方箱子：'+v.issues.find(i=>i.severity==='error').message);return;}change(()=>{draft.children=children;selected=null;});};
  $('applyCoords').onclick=()=>{if(selected)applyPosition({x:+$('coordX').value,y:+$('coordY').value,z:+$('coordZ').value});};
  $('alignStart3d').onclick=()=>{const b=boxes().find(b=>b.uid===selected);if(!b)return;const below=boxes().filter(a=>a.uid!==b.uid&&Math.abs(a.z+a.dz-b.z)<C.EPS);applyPosition({x:below.length?Math.min(...below.map(a=>a.x)):0});};
  $('alignWidth3d').onclick=()=>{const b=boxes().find(b=>b.uid===selected);if(!b)return;const below=boxes().filter(a=>a.uid!==b.uid&&Math.abs(a.z+a.dz-b.z)<C.EPS);if(!below.length){toast('先把箱子放到支撑箱顶面，再使用宽向居中');return;}const min=Math.min(...below.map(a=>a.y)),max=Math.max(...below.map(a=>a.y+a.dy));applyPosition({y:Math.max(0,(min+max-b.dy)/2)});};
@@ -91,7 +91,7 @@
   if(!p.cargos.length){toast('先导入装箱单，或试用叠箱示例');return;}
   await PlannerLearning.ready;
   const proposal=PlannerExperience.combine({...p,draft:null},PlannerLearning.state,{replace}),all=units();proposal.signature=C.fingerprint(p);
-  const warnings=[...new Set(proposal.groups.flatMap(g=>C.validate(C.groupBoxes(g,all),p.settings).issues.filter(i=>i.severity==='warning').map(i=>i.message)))];
+  const warnings=[...new Set(proposal.groups.flatMap(g=>C.validatePlacement(C.groupBoxes(g,all),p.settings).issues.filter(i=>i.severity==='warning').map(i=>i.message)))];
   const pendingSecuring=proposal.groups.reduce((n,g)=>n+C.Transport.screen(C.groupBoxes(g,all)).needsSecuring,0);
   if(pendingSecuring)warnings.unshift(pendingSecuring+' 箱仍需防倾倒加固确认。采用组合仅保存相对位置；装柜和装卸时仍需落实侧挡、支架或绑扎，未确认的布局不会自动用于经验学习。');
   dialog('一键组合 · 先看方案，再调整',
