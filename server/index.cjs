@@ -16,7 +16,7 @@ async function createApp({env=process.env,store:provided,authenticate:providedAu
    if(origin&&!sameOrigin&&!origins.includes(origin))throw A.error(403,'此页面来源未获服务端允许');
    if(origin){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type, X-Operation-Id');res.setHeader('Access-Control-Allow-Methods','GET, POST, PUT, OPTIONS');}
    if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}
-   if(route===API+'/health'){json(res,200,{ok:true,version:'3.2.0',authMode:env.PLANNER_AUTH_MODE||'erp'});return;}
+   if(route===API+'/health'){json(res,200,{ok:true,version:'3.3.0',authMode:env.PLANNER_AUTH_MODE||'erp'});return;}
    if(route.startsWith(API+'/')){
     const user=await authenticate(req);let match;
     if(route===API+'/me'&&req.method==='GET'){json(res,200,user);return;}

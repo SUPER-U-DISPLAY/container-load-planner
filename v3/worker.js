@@ -1,7 +1,10 @@
-importScripts('transport.js?v=3.2.0','core.js?v=3.2.0');
+importScripts('transport.js?v=3.3.0','core.js?v=3.3.0','bridge.js?v=3.3.0');
 self.onmessage = ({data}) => {
   try {
-    if(data.action==='recommend') {
+    if(data.action==='recommend-mixed') {
+      const results=PlannerBridge.recommend(data.project,data.presets,progress=>postMessage({type:'progress',job:data.job,progress}));
+      postMessage({type:'recommend-mixed',job:data.job,results});
+    } else if(data.action==='recommend') {
       const results=[];
       for(const type of ['20GP','40GP','40HQ','45HQ']) {
         const p=PlannerCore.clone(data.project);p.settings.containers=[{type,qty:1}];p.settings.autoAdd=true;

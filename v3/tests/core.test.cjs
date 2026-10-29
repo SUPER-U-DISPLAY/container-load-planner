@@ -56,7 +56,7 @@ test('组合真实体积不包含外包空隙',()=>{
  const cs=[cargo('a'),cargo('b',500,1000,500,{weight:10})],g={id:'g',name:'g',children:[{uid:'a#1',x:0,y:0,z:0,orientation:0},{uid:'b#1',x:250,y:0,z:1000,orientation:0}]};const r=C.pack(p(cs,[g]));assert.equal(r.containers[0].volume,1.25);assert.equal(r.containers[0].blocks[0].dz,1500);
 });
 test('自动同底面组合不会漏箱、重复或超高',()=>{
- const project=p([cargo('a',1200,1000,400,{qty:9,weight:50})]);project.groups=C.autoGroup(project);assert.equal(project.groups.length,3);assert.equal(new Set(project.groups.flatMap(g=>g.children.map(b=>b.uid))).size,9);const r=C.pack(project);assert.equal(r.loaded,9);assert.equal(r.audit.ok,true);
+ const project=p([cargo('a',1200,1000,400,{qty:9,weight:50})],[],{planningMode:'self-stable'});project.groups=C.autoGroup(project);assert.equal(project.groups.length,3);assert.equal(new Set(project.groups.flatMap(g=>g.children.map(b=>b.uid))).size,9);const r=C.pack(project);assert.equal(r.loaded,9);assert.equal(r.audit.ok,true);
 });
 test('整组旋转正确转换子箱坐标，不允许旋转的子箱禁止组旋转',()=>{
  const cs=[cargo('a',1000,2400,1000,{weight:80}),cargo('b',500,2400,500,{weight:10})],g={id:'g',name:'g',children:[{uid:'a#1',x:0,y:0,z:0,orientation:0},{uid:'b#1',x:0,y:0,z:1000,orientation:0}]};let r=C.pack(p(cs,[g]));assert.equal(r.loaded,2);assert.equal(r.audit.ok,true);cs[0].rotateMode='none';r=C.pack(p(cs,[g]));assert.equal(r.loaded,0);assert.equal(r.unpacked.length,2);

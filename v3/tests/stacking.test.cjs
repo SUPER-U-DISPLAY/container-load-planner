@@ -23,7 +23,7 @@ test('快捷选项会拦截重箱在上、超高和累计承压问题',()=>{
  for(const top of [u('heavy',1000,1000,500,{weight:20}),u('tall',1000,1000,900,{weight:1}),u('load',1000,1000,400,{weight:6})])assert.equal(S.suggest(top,[b]).above.length,0);
 });
 test('未知重量承载链不自动上叠；缺尺寸、层数和零承压分类明确',()=>{
- const base=C.box(u('base',1000,1000,1000)),top=u('top',1000,1000,500,{weight:null}),r=S.suggest(top,[base]);assert.equal(r.above.length,0);assert.match(r.reason,/重量未确认/);assert.ok(r.beside.length);
+ const base=C.box(u('base',1000,1000,1000)),top=u('top',1000,1000,500,{weight:null}),r=S.suggest(top,[base],{planningMode:'self-stable'});assert.equal(r.above.length,0);assert.match(r.reason,/重量未确认/);assert.ok(r.beside.length);
  assert.equal(S.supportClass({...top,l:0}),'pending');assert.equal(S.suggest({...top,l:0},[base]).above.length,0);
  assert.equal(S.supportClass({...top,maxLayers:1}),'topOnly');assert.equal(S.supportClass({...top,topLoad:0}),'topOnly');
 });

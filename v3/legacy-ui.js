@@ -270,7 +270,7 @@
         });
         renderCargoTable();
         var s = S.result.summary;
-        toast('计算完成：' + s.containerCount + ' 个柜，装入 ' + s.packedUnits + '/' + s.totalUnits +
+        toast('计算完成：' + s.containerCount + ' 个柜，'+(S.result.readiness&&!S.result.readiness.ready?'预排 ':'装入 ') + s.packedUnits + '/' + s.totalUnits +
           ' 箱，平均利用率 ' + pct(s.avgVolumeRate) + '（耗时 ' + ms + 'ms）',
           s.unpackedUnits || S.result.transport.needsSecuring ? 'warn' : 'ok');
         renderRuleCard();
@@ -334,7 +334,7 @@
     $('glBadge').style.display = '';
     $('glBadge').innerHTML =
       '第 ' + ct.index + ' 柜 · ' + esc(ct.spec.name) + '<br>' +
-      '装入 <b>' + st.count + '</b> 箱 ｜ 体积利用率 <b>' + pct(st.volumeRate) + '</b><br>' +
+      (S.result.readiness&&!S.result.readiness.ready?'预排 <b>':'装入 <b>') + st.count + '</b> 箱 ｜ 体积利用率 <b>' + pct(st.volumeRate) + '</b><br>' +
       '毛重 <b>' + fmt(st.weight, 1) + '</b> kg ｜ 载重率 <b>' + pct(st.weightRate) + '</b>';
   }
 
@@ -344,13 +344,13 @@
     $('summaryBox').innerHTML =
       '<div class="stat-grid" style="margin-bottom:8px">' +
         '<div class="stat"><div class="k">所需柜数</div><div class="v">' + s.containerCount + '<small>个</small></div></div>' +
-        '<div class="stat ' + (okAll ? 'ok' : 'danger') + '"><div class="k">装入 / 总数</div><div class="v">' + s.packedUnits + '<small>/' + s.totalUnits + '</small></div></div>' +
+        '<div class="stat ' + (okAll ? 'ok' : 'danger') + '"><div class="k">预排 / 总数</div><div class="v">' + s.packedUnits + '<small>/' + s.totalUnits + '</small></div></div>' +
         '<div class="stat"><div class="k">总体积</div><div class="v">' + fmt(s.totalVolumeCbm, 2) + '<small>cbm</small></div></div>' +
         '<div class="stat"><div class="k">总毛重</div><div class="v">' + fmt(s.totalWeight, 0) + '<small>kg</small></div></div>' +
       '</div>' +
       '<div class="kv"><span class="k">平均体积利用率</span><span class="v">' + pct(s.avgVolumeRate) + '</span></div>' +
       '<div class="bar ' + (s.avgVolumeRate > .8 ? 'g' : s.avgVolumeRate > .55 ? '' : 'w') + '"><i style="width:' + Math.min(100, s.avgVolumeRate * 100) + '%"></i></div>' +
-      (okAll ? '<div class="'+(S.result.warnings.length?'warn-box':'info-box')+'" style="margin-top:8px">'+(S.result.transport.needsSecuring?'已装齐；仍有 '+S.result.transport.needsSecuring+' 箱需防倾倒加固确认':S.result.warnings.length?'已装齐；仍有承压、重量或重心事项需确认':'✓ 全部货物已装入，防倾倒初筛未发现异常')+'</div>'
+      (okAll ? '<div class="'+(S.result.warnings.length?'warn-box':'info-box')+'" style="margin-top:8px">'+(S.result.transport.needsSecuring?'已全部预排；仍有 '+S.result.transport.needsSecuring+' 箱需防倾倒加固确认':S.result.warnings.length?'已装齐；仍有承压、重量或重心事项需确认':'✓ 全部货物已装入，防倾倒初筛未发现异常')+'</div>'
              : '<div class="err-box" style="margin-top:8px">⚠ 仍有 ' + s.unpackedUnits + ' 箱未装入，见下方清单</div>') +
       '<div class="hint" style="margin-top:8px;padding:6px 8px;background:#f7f9fc;border-radius:6px;line-height:1.8">' +
         '<b>📖 数据解读：</b><br>' +
@@ -534,7 +534,7 @@
     var ct = S.result.containers[S.cur], st = ct.stats;
     viewer.renderer.render(viewer.scene, viewer.camera);
     Exporter.exportPng(viewer.canvas, {
-      title: S.title + ' — 第 ' + ct.index + ' 柜（' + ct.spec.name + '）',
+      title: (S.result.readiness&&!S.result.readiness.ready?'[条件预排 · 待核实] ':'') + S.title + ' — 第 ' + ct.index + ' 柜（' + ct.spec.name + '）',
       line: '装入 ' + st.count + ' 箱　体积利用率 ' + pct(st.volumeRate) + '　装载体积 ' + fmt(st.volumeUsedCbm, 3) +
             ' cbm　毛重 ' + fmt(st.weight, 1) + ' kg　载重率 ' + pct(st.weightRate) +
             '　重心 X' + Math.round(st.cog.x) + '/Y' + Math.round(st.cog.y) + '/Z' + Math.round(st.cog.z) + ' mm'
@@ -562,7 +562,7 @@
       });
     });
     chain.then(function () {
-      return Exporter.exportPdf({ title: S.title, result: S.result, shots: shots }, S.title + '_装柜方案.pdf');
+      return Exporter.exportPdf({ title: (S.result.readiness&&!S.result.readiness.ready?'[条件预排 · 待核实] ':'') + S.title, result: S.result, shots: shots }, S.title + '_装柜方案.pdf');
     }).then(function () {
       S.cur = keep; renderTabs(); showContainer(keep);
       loading(false); toast('PDF 已导出', 'ok');
@@ -592,10 +592,21 @@
   function currentOptions(){return {supportRatio:S.settings.minSupport,maxContainers:S.settings.maxContainers,multiContainer:S.settings.autoAdd,sameKindFirst:!!S.settings.sameKindFirst,preferredSpecs:S.ctnSpecs};}
   function renderRuleCard(){
     $('ruleSummary').textContent=PlannerRules.summary(S.settings);
-    var details=S.result&&S.result.warningDetails||[],capacities=details.filter(function(w){return w.code==='capacityUnknown';}),names=Array.from(new Set(capacities.map(function(w){return w.name;}))),risks=details.filter(function(w){return w.code==='tippingRisk';}),riskCount=risks.reduce(function(n,w){return n+w.uids.length;},0),other=details.some(function(w){return w.code==='weightUnknown';}),balance=details.some(function(w){return w.code==='balance';}),notice=$('ruleNotice');
-    notice.hidden=!names.length&&!other&&!riskCount&&!balance;
-    notice.innerHTML=(riskCount?'<b>'+riskCount+' 箱需防倾倒加固确认</b><div>无约束高叠已作为放入限制。以下落地窄高件仍需独立固定，点击货物查看具体方向；邻货接触不代表已固定。</div>':'')+(names.length?'<div>承压资料待确认：'+names.slice(0,5).map(esc).join('、')+(names.length>5?'等 '+names.length+' 类箱型':'')+'。</div>':'')+(other?'<div>部分单箱重量未填写，请在货物清单中补充。</div>':'')+(balance?'<div>部分柜的重心偏移超过一般建议范围，请调整并按实称重量复核。</div>':'')+(!notice.hidden?'<button class="btn xs" id="completeCapacity">查看项目与箱型规则</button>':'');
-    var btn=$('completeCapacity');if(btn)btn.onclick=function(){openRules(null,names.length?'cargo':'common');};
+    var details=S.result&&S.result.warningDetails||[],capacities=details.filter(function(w){return w.code==='capacityUnknown';}),names=Array.from(new Set(capacities.map(function(w){return w.name;}))),risks=details.filter(function(w){return w.code==='tippingRisk';}),riskCount=risks.reduce(function(n,w){return n+w.uids.length;},0),other=details.some(function(w){return w.code==='weightUnknown'||w.code==='estimatedWeight';}),balance=details.some(function(w){return w.code==='balance';}),notice=$('ruleNotice');
+    var entry=details.filter(function(w){return w.code==='entryReview';}).length,plan=S.result&&S.result.planning;notice.hidden=!(S.result&&S.result.readiness&&!S.result.readiness.ready)&&!names.length&&!other&&!riskCount&&!balance&&!entry;
+    notice.innerHTML=(S.result&&S.result.readiness&&!S.result.readiness.ready?'<b>条件预排 · 资料与施工条件待核实</b><div>预排 '+S.result.summary.packedUnits+'/'+S.result.summary.totalUnits+' 箱，未装入 '+S.result.summary.unpackedUnits+' 箱。有尺寸货物 '+S.result.readiness.knownCargoVolume.toFixed(2)+' m³，其中已预排 '+S.result.summary.totalVolumeCbm.toFixed(2)+' m³。'+(S.result.readiness.heightHold?' '+S.result.readiness.heightHold+' 箱受高度/柜门条件限制。':'')+(S.result.readiness.missingDimensions?' '+S.result.readiness.missingDimensions+' 箱缺尺寸。':'')+(plan&&!plan.targetFound?'目标 '+plan.targetContainers+' 柜暂未找到完整摆法，尚未证明无法装入。':'')+'</div>':'')+(entry?'<div>'+entry+' 箱单件超过叠高，已作落地预排；柜门、公差及搬运方式须核实。</div>':'')+(riskCount?'<b>'+riskCount+' 箱需防倾倒加固确认</b><div>这是条件预排，加固尚未核实。点击货物可查看作用方向、高度和拟用措施；邻货接触不代表已固定。</div>':'')+(names.length?'<div>承压资料待确认：'+names.slice(0,5).map(esc).join('、')+(names.length>5?'等 '+names.length+' 类箱型':'')+'。</div>':'')+(other?'<div>部分单箱重量缺失或为估算，请核实后在货物清单及箱型规则中补充。</div>':'')+(balance?'<div>部分柜的重心偏移超过一般建议范围，请调整并按实称重量复核。</div>':'')+(!notice.hidden?'<button class="btn xs" id="completeCapacity">查看项目与箱型规则</button> <button class="btn xs" id="showConditions">查看 / 导出待核实条件</button>':'');
+    var btn=$('completeCapacity');if(btn)btn.onclick=function(){openRules(null,names.length?'cargo':'common');};var conditions=$('showConditions');if(conditions)conditions.onclick=showConditions;
+  }
+  function showConditions(){
+    if(!S._rawResult)return;
+    var rows=[['状态','柜号','箱号 / 品名','事项','作用位置 / 条件','需核实']];
+    S._rawResult.containers.forEach(function(ct,i){
+      (ct.transport.plans||[]).forEach(function(plan){plan.actions.forEach(function(a){rows.push(['待核实',i+1,(plan.ctnNo||plan.uid)+' '+plan.name,a.label+' '+(a.method==='blocking'?'侧挡 / 撑木':'直接固定'),'X/Y/Z '+a.at.x+'/'+a.at.y+'/'+a.at.z+' mm；'+(a.demandN?'初筛需求 '+a.demandN+' N':'重量待填'),a.specification+' '+a.checks.join('、')]);});});
+      ct.issues.filter(function(w){return ['entryReview','capacityUnknown','weightUnknown','estimatedWeight'].includes(w.code);}).forEach(function(w){rows.push(['待核实',i+1,w.name||w.uid||'本柜',w.code==='entryReview'?'单件进柜':w.code==='capacityUnknown'?'上压承重':'单箱重量','',w.message]);});
+    });
+    S._rawResult.unpacked.forEach(function(b){rows.push(['未装入','',b.uid+' '+b.name,'待处理','',b.reason]);});
+    var html='<div class="warn-box">本表为预排条件，不是施工图或加固验收。力值按几何重心和零摩擦信用初筛；不得据此直接选绑带数量或撑木截面。实际材料、固定点、占用空间及装卸工序需核定后复核摆放。</div><div style="max-height:55vh;overflow:auto;margin-top:10px"><table style="border-collapse:collapse;width:100%;font-size:12px">'+rows.map(function(row,i){return '<tr>'+row.map(function(v){return '<'+(i?'td':'th')+' style="border:1px solid #dce4ed;padding:7px;text-align:left;vertical-align:top">'+esc(v)+'</'+(i?'td':'th')+'>';}).join('')+'</tr>';}).join('')+'</table></div>';
+    modal('加固与进柜待核实条件',html,[{t:'导出清单 CSV',cls:'primary',fn:function(){var csv='\uFEFF'+rows.map(function(row){return row.map(function(v){var text=String(v??'');if(/^[\s]*[=+@\-\t\r]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"';}).join(',');}).join('\r\n'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})),a=document.createElement('a');a.href=url;a.download='SUPER-U-预排待核实条件.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);return false;}},{t:'关闭'}]);
   }
   function openRules(cargoId,tab){stopPlay();PlannerRules.open({
     getProject:function(){return PlannerBridge.fromLegacy(S,currentOptions());},selectedCargoId:typeof cargoId==='string'?cargoId:null,tab:tab,
@@ -628,31 +639,31 @@
     var usable = S.cargos.filter(function (c) { return c.l > 0 && c.w > 0 && c.h > 0 && c.qty > 0; });
     if (!usable.length) { toast('请先录入货物', 'err'); return; }
     loading(true, '正在评估各柜型…');
-    setTimeout(function () {
-      var list;try{list=PlannerBridge.recommend(PlannerBridge.fromLegacy(S,currentOptions()),ContainerLib.PRESETS);}catch(e){loading(false);toast(e.message,'err');return;}
+    setTimeout(async function () {
+      var list;try{const input=PlannerBridge.fromLegacy(S,currentOptions()),signature=PlannerCore.fingerprint(input);list=await new Promise(function(resolve,reject){var w=new Worker('worker.js?v=3.3.0');w.onmessage=function(e){if(e.data.type==='progress'){$('loadText').textContent=e.data.progress.message;return;}w.terminate();if(e.data.type==='error')reject(Error(e.data.message));else resolve(e.data.results);};w.onerror=function(e){w.terminate();reject(Error(e.message||'柜型比较失败'));};w.postMessage({action:'recommend-mixed',job:Date.now(),project:input,presets:ContainerLib.PRESETS});});if(signature!==PlannerCore.fingerprint(PlannerBridge.fromLegacy(S,currentOptions())))throw Error('箱单或规则已改变，请重新比较柜型');}catch(e){loading(false);toast(e.message,'err');return;}
       loading(false);
       if (!list.length) { toast('无可用柜型', 'err'); return; }
 
       // 取最优方案，自动填充到手动选型列表
       var best = list[0];
-      S.ctnSpecs = [{ spec: ContainerLib.byId(best.id), qty: best.containers }];
+      S.ctnSpecs = best.specs.map(function(c){return {spec:ContainerLib.byId(c.type),qty:c.qty};});
       renderCtnList(); updCtnVolLab(); save();
 
       // 显示推荐结果
       var resEl = $('recommendResult');
       resEl.style.display = '';
       resEl.innerHTML =
-        '✅ 推荐 <b>' + esc(best.name) + '</b> × <b>' + best.containers + '</b> 柜，' +
-        '平均利用率 <b>' + pct(best.rate) + '</b>' +
+        '推荐预排 <b>' + esc(best.name) + '</b>，共 <b>' + best.containers + '</b> 柜，' +
+        '平均利用率 <b>' + pct(best.rate) + '</b>；'+(best.pricingComplete?'按估算总费用比较':'候选费用未齐，按柜数与容积比较') +
         (best.unpacked ? '，<span class="danger">未装入 ' + best.unpacked + ' 箱</span>' : '') +
-        '<br><span style="color:var(--text-3)">已自动添加到下方列表，可手动调整数量或增减柜型。</span>';
+        '<br><span style="color:var(--text-3)">已添加到下方列表；请确认柜型与运价可用。预排仍需核实加固及进柜条件。</span>';
 
       // 同时展示完整对比表（可选查看）
       var detailHtml = '<div style="margin-top:6px"><table style="width:100%;font-size:11px;border-collapse:collapse">' +
         '<tr style="background:var(--bg)"><th style="padding:3px 4px;text-align:left">柜型</th><th style="padding:3px 4px;text-align:right">柜数</th><th style="padding:3px 4px;text-align:right">利用率</th></tr>';
       list.slice(0, 5).forEach(function (r, i) {
         detailHtml += '<tr' + (i === 0 ? ' style="background:#eef3ff;font-weight:600"' : '') + '>' +
-          '<td style="padding:2px 4px">' + r.name.replace(/\s.*$/, '') + (i === 0 ? ' ⭐' : '') + '</td>' +
+          '<td style="padding:2px 4px">' + esc(r.name.replace(/\s.*$/, '')) + (i === 0 ? ' ⭐' : '') + '</td>' +
           '<td style="padding:2px 4px;text-align:right">' + r.containers + '</td>' +
           '<td style="padding:2px 4px;text-align:right;color:' + (r.rate > .7 ? '#16a34a' : r.rate > .5 ? '#d97706' : '#dc2626') + '">' + pct(r.rate) + '</td></tr>';
       });

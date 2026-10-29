@@ -1,6 +1,6 @@
 {
   "name": "superu-container-load-planner",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "private": true,
   "description": "SUPER U container planning, manual editing and experience learning",
   "engines": {

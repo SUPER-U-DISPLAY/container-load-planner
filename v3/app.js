@@ -156,7 +156,7 @@
   }
   function startCalculation(action){
     if(worker)worker.terminate();job++;const currentJob=job;
-    try{worker=new Worker('worker.js?v=2.1.0');}catch(e){return toast('无法启动计算，请使用在线地址或本地 HTTP 服务打开。');}
+    try{worker=new Worker('worker.js?v=3.3.0');}catch(e){return toast('无法启动计算，请使用在线地址或本地 HTTP 服务打开。');}
     setBusy(true);$('calcProgress').classList.remove('hidden');$('progressText').textContent='正在整理组合与箱号…';
     worker.onmessage=({data})=>{if(data.job!==currentJob||job!==currentJob)return;if(data.type==='progress'){$('progressText').textContent=data.progress.message||'已装入 '+data.progress.loaded+' 箱，正在计算第 '+data.progress.step+' 柜';return;}
       worker.terminate();worker=null;setBusy(false);$('calcProgress').classList.add('hidden');if(data.type==='error')return toast(data.message);
