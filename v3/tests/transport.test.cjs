@@ -2,7 +2,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const C=require('../core.js'),T=C.Transport,B=require('../bridge.js'),P=require('../layout.js'),E=require('../experience.js'),R=require('../rules.js');
 const cargo=(id,extra={})=>({id,name:id,l:2000,w:200,h:2000,qty:1,weight:100,topLoad:0,rotateMode:'upright',stackable:false,...extra});
-const project=cs=>({...B.empty(),cargos:cs});
+// Preserve the v3.2 strict-mode regressions alongside assisted-mode tests.
+const project=cs=>{const p={...B.empty(),cargos:cs};p.settings.planningMode='self-stable';return p;};
 const placed=(c,pos={})=>C.box({...c,uid:c.id+'#1',index:1},pos);
 test('窄高货物按前后和左右分别初筛，柜壁接触不代表已经固定',()=>{
  const b=placed(cargo('narrow')),r=T.screen([b],C.SPECS['40HQ']);assert.equal(r.needsSecuring,1);assert.deepEqual(r.risks[0].weak,['yMinus','yPlus']);assert.equal(r.risks[0].contacts.yMinus.kind,'wall');assert.equal(r.risks[0].contacts.yMinus.verified,false);assert.ok(r.risks[0].exposed.includes('yPlus'));

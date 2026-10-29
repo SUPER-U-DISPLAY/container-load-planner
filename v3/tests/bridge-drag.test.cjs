@@ -13,7 +13,7 @@ test('修改装箱单不能让草稿箱号失效或重复占用另一组合',()=
 test('结果页中右栏布局、模型选择、动画及明细保持原版，安全提示允许更新',()=>{
  const original=fs.readFileSync(__dirname+'/../../index.html','utf8'),next=fs.readFileSync(__dirname+'/../index.html','utf8'),extractHTML=s=>s.slice(s.indexOf('<!-- ============ 中栏'),s.indexOf('<script'));assert.ok(extractHTML(original).length>1000);assert.equal(extractHTML(next),extractHTML(original));
  const rootUI=fs.readFileSync(__dirname+'/../../js/ui.js','utf8'),ui=fs.readFileSync(__dirname+'/../legacy-ui.js','utf8');
- const functions=s=>new Map([...s.matchAll(/^  function (\w+)\([^\n]*\) \{[\s\S]*?^  \}/gm)].map(m=>[m[1],m[0]]));const a=functions(rootUI),b=functions(ui);
+ const functions=s=>new Map([...s.matchAll(/^  function (\w+)\([^\n]*\) \{[\s\S]*?^  \}/gm)].map(m=>[m[1],m[0]]));const a=functions(rootUI),b=functions(ui.replace("(S.result.readiness&&!S.result.readiness.ready?'预排 <b>':'装入 <b>')","'装入 <b>'").replaceAll("(S.result.readiness&&!S.result.readiness.ready?'[条件预排 · 待核实] ':'') + ",''));
  for(const name of ['renderResult','renderTabs','showContainer','renderBadge','renderSeqList','renderLegend','renderUnpacked','renderDetail','updSeqLab','stopPlay','play','exportImage','exportPdf']){assert.ok(a.get(name),'missing original '+name);assert.equal(b.get(name),a.get(name),name);}
  assert.match(ui,/需防倾倒加固确认/);assert.match(ui,/一般建议 ±5%/);
 });
