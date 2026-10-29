@@ -95,7 +95,8 @@
   }
   const weights=ctx.policy?.enabled?ctx.policy.weights:{};
   for(const c of candidates)c.score=preferenceScore(project,c.result,weights);
-  candidates.sort((a,b)=>C.Transport.compare(a.result,b.result)||b.score-a.score||(a.source==='历史确认方案'?-1:0)-(b.source==='历史确认方案'?-1:0));
+  const usePrices=candidates.every(c=>Number.isFinite(c.result.estimatedCost));
+  candidates.sort((a,b)=>C.Transport.compare(a.result,b.result,{usePrices})||b.score-a.score||(a.source==='历史确认方案'?-1:0)-(b.source==='历史确认方案'?-1:0));
   const best=candidates[0];best.result.learning={source:best.source,caseId:best.caseId||null,policyVersion:ctx.policy?.id||'base',candidates:candidates.map(c=>({source:c.source,loaded:c.result.loaded,containers:c.result.containers.length,preferenceScore:c.score})),transportOutcome:'unknown'};
   return best.result;
  }

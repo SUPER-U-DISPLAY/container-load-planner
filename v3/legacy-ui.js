@@ -654,7 +654,7 @@
       resEl.style.display = '';
       resEl.innerHTML =
         '推荐预排 <b>' + esc(best.name) + '</b>，共 <b>' + best.containers + '</b> 柜，' +
-        '平均利用率 <b>' + pct(best.rate) + '</b>' +
+        '平均利用率 <b>' + pct(best.rate) + '</b>；'+(best.pricingComplete?'按估算总费用比较':'候选费用未齐，按柜数与容积比较') +
         (best.unpacked ? '，<span class="danger">未装入 ' + best.unpacked + ' 箱</span>' : '') +
         '<br><span style="color:var(--text-3)">已添加到下方列表；请确认柜型与运价可用。预排仍需核实加固及进柜条件。</span>';
 

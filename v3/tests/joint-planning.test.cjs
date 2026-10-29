@@ -41,7 +41,7 @@ test('缺尺寸箱保持库存守恒，不计入货物体积；加固示意用�
 });
 test('估算费用只在柜费和加固费用齐全时参与比较，不能混入默认零价',()=>{
  const p=constrained();assert.equal(C.pack(p).estimatedCost,null);p.settings.containerCosts={'40HQ':1000};p.settings.securingUnitCost=20;const r=C.pack(p);assert.equal(r.estimatedCost,1000+20*r.transport.planCount);
- const a={loaded:2,containers:[{}],estimatedCost:2000},b={loaded:2,containers:[{},{}],estimatedCost:1500};assert.ok(C.Transport.compare(a,b)>0);
+ const a={loaded:2,containers:[{}],estimatedCost:2000},b={loaded:2,containers:[{},{}],estimatedCost:1500};assert.ok(C.Transport.compare(a,b,{usePrices:true})>0);
 });
 test('包装模板按明确尺寸、重量范围、规则版本及生产依据复用，不按名称推断',()=>{
  const p=project([cargo('a'),cargo('b',{weight:80})]);const profile={id:'wood-v1',version:1,name:'同规格木箱',reference:'生产工艺A',dimensions:[1200,1000,500],maxWeight:100,rules:{packageType:'wooden',rotateMode:'upright',stackable:true,maxLayers:2,topLoad:120}};
@@ -54,3 +54,5 @@ test('目标柜数用于有界搜索，未找到目标不谎称数学上装不�
 });
 
 test('估算重量即使几何稳定也不能成为已核实案例，来源变化切断模板精确匹配',()=>{const p=project([cargo('a',{weightSource:'estimated'})]),r=C.pack(p);assert.equal(r.transport.needsSecuring,0);assert.equal(r.readiness.ready,false);const c=E.makeCase({id:'estimate',final:{project:p,result:r}});assert.equal(E.eligible(c),false);assert.notEqual(E.typeKey(p.cargos[0]),E.typeKey({...p.cargos[0],weightSource:'measured'}));});
+
+test('柜型比较有缺价时统一排序，费用齐全后才统一比较总费用',()=>{const p=project([cargo('small')]),presets=['20GP','40HQ'].map(id=>({id,name:id,...C.SPECS[id]}));p.settings.containerCosts={'40HQ':1000};let list=B.recommend(p,presets);assert.ok(list.every(r=>r.pricingComplete===false));assert.equal(list[0].id,'20GP');p.settings.containerCosts['20GP']=2000;list=B.recommend(p,presets);assert.ok(list.every(r=>r.pricingComplete));assert.equal(list[0].id,'40HQ');});

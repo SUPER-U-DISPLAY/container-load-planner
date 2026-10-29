@@ -50,7 +50,8 @@
   for(const base of [...list].filter(r=>['40HQ','45HQ'].includes(r.id)&&r.containers>1&&r.containers<=6&&r.unpacked===least))for(const tail of available.filter(s=>['20GP','40GP'].includes(s.id))){
    const specs=[{type:base.id,qty:base.containers-1},{type:tail.id,qty:1}],name=base.id+'×'+(base.containers-1)+'＋'+tail.id+'×1';run(specs,name,'mixed:'+base.id+':'+tail.id);
   }
-  return list.filter(r=>r.containers).sort((a,b)=>a.unpacked-b.unpacked||(Number.isFinite(a.estimatedCost)&&Number.isFinite(b.estimatedCost)?a.estimatedCost-b.estimatedCost:0)||a.containers-b.containers||a.capacity-b.capacity);
+  const valid=list.filter(r=>r.containers),pricingComplete=valid.every(r=>Number.isFinite(r.estimatedCost));
+  return valid.map(r=>({...r,pricingComplete})).sort((a,b)=>a.unpacked-b.unpacked||(pricingComplete?a.estimatedCost-b.estimatedCost:0)||a.containers-b.containers||a.capacity-b.capacity);
  }
  const api={KEY,empty,cleanCargo,fromLegacy,dirty,read,write,toLegacy,packProject,recommend};if(typeof module==='object')module.exports=api;else root.PlannerBridge=api;
 })(typeof window!=='undefined'?window:globalThis);

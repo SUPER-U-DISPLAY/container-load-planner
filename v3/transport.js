@@ -154,9 +154,11 @@
    return sum+risk*(1-n*.16)+stackRisk+(risk>EPS?b.z/10000:0);
   },0);
  }
- function compare(a,b){
+ function compare(a,b,{usePrices=false}={}){
   const pending=r=>r.containers.reduce((n,c)=>n+(c.transport?.needsSecuring||0),0),cost=r=>r.containers.reduce((n,c)=>n+(c.transport?.cost||0),0);
-  const priced=Number.isFinite(a.estimatedCost)&&Number.isFinite(b.estimatedCost)?a.estimatedCost-b.estimatedCost:0;
+  // Callers enable prices only once for an entirely priced candidate set.
+  // Pairwise fallback would produce a non-transitive comparator.
+  const priced=usePrices&&Number.isFinite(a.estimatedCost)&&Number.isFinite(b.estimatedCost)?a.estimatedCost-b.estimatedCost:0;
   const effort=r=>r.containers.reduce((n,c)=>n+(c.transport?.planEffort??c.transport?.cost??0),0);
   return b.loaded-a.loaded||priced||a.containers.length-b.containers.length||effort(a)-effort(b)||pending(a)-pending(b)||cost(a)-cost(b);
  }

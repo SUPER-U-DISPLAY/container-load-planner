@@ -428,7 +428,7 @@
         candidates.push(packOnce(project,onProgress,{positionMode:'joint',searchOrder:'mix-'+seed,containerLimit:Math.min(target,cfg.autoAdd?Math.max(queue.length,cfg.maxContainers):queue.length)}));
         candidates.push(packOnce(project,onProgress,{positionMode:'joint',searchOrder:'mix-'+seed}));
       }
-      const best=[...candidates].sort(T.compare)[0];
+      const usePrices=candidates.every(r=>finite(r.estimatedCost)),best=[...candidates].sort((a,b)=>T.compare(a,b,{usePrices}))[0];
       if(cfg.stabilityAware!==false){for(const ct of best.containers)repairExposure(ct,cfg);resultMeta(project,best);best.audit=audit(project,best);}
       best.planning={engineVersion:T.VERSION,selected:'联合预排 · 多顺序比较',targetContainers:target,lowerBound:lower,targetFound:best.containers.length<=target&&best.loaded===input.units.length-input.unpacked.length,candidates:candidates.map(r=>({loaded:r.loaded,containers:r.containers.length,needsSecuring:r.transport.needsSecuring,estimatedCost:r.estimatedCost})),searchNote:'有限多方案搜索；未找到目标柜数不等于已证明无法装入。'};
       return best;
@@ -436,7 +436,7 @@
     const base=packOnce(project,onProgress,options);
     if(options.positionMode||project.settings.stabilityAware===false)return base;
     const stable=packOnce(project,onProgress,{positionMode:'stability'}),compact=packOnce(project,onProgress,{positionMode:'compact'}),wallFirst=packOnce(project,onProgress,{positionMode:'wall-first'}),candidates=[base,stable,compact,wallFirst];
-    const best=[...candidates].sort(T.compare)[0];
+    const usePrices=candidates.every(r=>finite(r.estimatedCost)),best=[...candidates].sort((a,b)=>T.compare(a,b,{usePrices}))[0];
     best.planning={engineVersion:T.VERSION,selected:best===stable?'防倾倒候选':best===compact?'紧凑防倾倒候选':best===wallFirst?'窄高件先定位候选':'基础候选',candidates:candidates.map(r=>({loaded:r.loaded,containers:r.containers.length,needsSecuring:r.containers.reduce((n,c)=>n+c.transport.needsSecuring,0),exposureCost:r.containers.reduce((n,c)=>n+c.transport.cost,0)}))};
     return best;
   }
